@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "jest --runInBand",
     "import": "node dist/cli/import.js",
+    "api-keys": "node dist/cli/api-keys.js",
     "migrate": "node-pg-migrate up --migrations-dir migrations",
     "migrate:down": "node-pg-migrate down --migrations-dir migrations",
     "lint:openapi": "redocly lint openapi/openapi.yaml"

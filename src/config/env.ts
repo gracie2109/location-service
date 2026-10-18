@@ -5,6 +5,10 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   DATABASE_URL: z.string().min(1).optional(),
   /** How often a running instance checks whether a newer catalog version was imported. */
+  /** Requests per minute per IP on public routes (bursts up to twice this). */
+  PUBLIC_RATE_LIMIT_PER_MIN: z.coerce.number().int().min(1).max(100_000).default(60),
+  /** Number of reverse proxies in front of the service whose X-Forwarded-For is trusted (0 = none). */
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
   CATALOG_REFRESH_SECONDS: z.coerce.number().int().min(1).max(3600).default(60),
 });
 
