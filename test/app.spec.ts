@@ -29,6 +29,11 @@ describe("app", () => {
     expect(res.body).toMatchObject({ status: 503, code: "catalog_unavailable", instance: "/ready" });
   });
 
+  it("read endpoints are 503 problem+json while no catalog is loaded", async () => {
+    const res = await request(app.getHttpServer()).get("/api/v1/provinces").expect(503);
+    expect(res.body).toMatchObject({ status: 503, code: "catalog_unavailable" });
+  });
+
   it("does not advertise the framework", async () => {
     const res = await request(app.getHttpServer()).get("/health");
     expect(res.headers["x-powered-by"]).toBeUndefined();
