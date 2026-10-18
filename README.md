@@ -34,3 +34,7 @@ TEST_DATABASE_URL=$DATABASE_URL npm test   # database tests are skipped without 
 
 Configuration is read and validated in `src/config/env.ts`; the service refuses to start on
 invalid values. Errors are returned as `application/problem+json`.
+
+GHN mapping: `npm run providers -- ghn sync` (needs `GHN_TOKEN` and `GHN_SHOP_ID`, only sends GET requests,
+dry run unless `--apply`) records what GHN's two-level master data contains as proposals; a person confirms
+them with `ghn confirm` / `ghn reject`. GHN returns no state code, so nothing is linked automatically.

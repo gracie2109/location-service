@@ -2,7 +2,7 @@ import { loadEnv } from "./env";
 
 describe("loadEnv", () => {
   it("applies defaults", () => {
-    expect(loadEnv({})).toEqual({ NODE_ENV: "development", PORT: 3000, CATALOG_REFRESH_SECONDS: 60, PUBLIC_RATE_LIMIT_PER_MIN: 60, TRUST_PROXY_HOPS: 0 });
+    expect(loadEnv({})).toEqual({ NODE_ENV: "development", PORT: 3000, CATALOG_REFRESH_SECONDS: 60, PUBLIC_RATE_LIMIT_PER_MIN: 60, TRUST_PROXY_HOPS: 0, GHN_BASE_URL: "https://online-gateway.ghn.vn" });
   });
 
   it("coerces PORT", () => {
