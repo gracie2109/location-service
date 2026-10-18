@@ -9,9 +9,10 @@ It does not depend on any consumer application.
 
 ## Status
 
-Steps S1 (scaffold) and S2 (schema) are done. Only `GET /health` and `GET /ready` exist.
-`/ready` answers 503 until the database is reachable and a current catalog version exists
-(steps S3 to S5). No catalog data is included or invented; tests use fixtures marked as such.
+Steps S1 (scaffold), S2 (schema), S3 (read API under `/api/v1`) and S4 (import CLI) are done.
+`/ready` and the read endpoints answer 503 until a catalog has been imported (step S5, which needs
+the official data file). No catalog data is included or invented; tests use fixtures marked as such.
+Import format and commands: [docs/import.md](docs/import.md).
 
 ## Develop
 
