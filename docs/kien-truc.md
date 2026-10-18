@@ -250,6 +250,8 @@ location-service import gso --file data/gso/2025-07-01/source.xlsx \
 4. Mặc định chỉ chạy thử (dry run) và in báo cáo. Có `--apply` thì ghi toàn bộ trong **một giao dịch**, rồi lưu `import_runs.report` (số thêm, sửa, bỏ qua, lỗi) và đặt `is_current`.
 5. File gốc, `README` (nguồn, người tải, ngày) và báo cáo import được commit vào `data/` của repo dịch vụ.
 
+> Ghi chú triển khai (S4): lệnh thực tế là `node dist/cli/import.js catalog --units ... [--successions ...]`, nhận CSV chuẩn của dịch vụ và nạp đơn vị cùng kế thừa trong một giao dịch; xem `docs/import.md`. Bộ chuyển file `.xlsx` của Cục Thống kê sang CSV viết ở S5 khi có file thật.
+
 Quan hệ kế thừa nạp bằng `location-service import successions --file ...csv` (cột `from_official_code, to_official_code, kind, is_whole, basis, effective_on`), cũng chạy thử mặc định.
 
 ### 6.3 Mapping GHN
