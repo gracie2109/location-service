@@ -2,7 +2,7 @@ import { loadEnv } from "./env";
 
 describe("loadEnv", () => {
   it("applies defaults", () => {
-    expect(loadEnv({})).toEqual({ NODE_ENV: "development", PORT: 3000 });
+    expect(loadEnv({})).toEqual({ NODE_ENV: "development", PORT: 3000, CATALOG_REFRESH_SECONDS: 60 });
   });
 
   it("coerces PORT", () => {

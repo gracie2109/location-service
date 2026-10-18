@@ -39,3 +39,43 @@ export const insertFixtureCatalog = async (client: Client, id = "fixture-test-1"
     [id, id.padEnd(64, "0").replace(/[^0-9a-f]/g, "a"), current],
   );
 };
+
+type FixtureUnitRow = {
+  code: string;
+  level: string;
+  unitType: string;
+  officialCode: string | null;
+  name: string;
+  fullName: string;
+  parentCode: string | null;
+  validFrom: string;
+  validTo: string | null;
+};
+
+type FixtureSuccessionRow = { fromCode: string; toCode: string; kind: string; isWhole: boolean; basis: string; effectiveOn: string };
+
+/** Inserts units, their versions and successions under an existing catalog version. */
+export const insertFixtureUnits = async (
+  client: Client,
+  catalogId: string,
+  units: FixtureUnitRow[],
+  successions: FixtureSuccessionRow[],
+): Promise<void> => {
+  for (const unit of units) {
+    await client.query("insert into location.units (code, level, created_in_version) values ($1, $2, $3)", [unit.code, unit.level, catalogId]);
+  }
+  for (const unit of units) {
+    await client.query(
+      `insert into location.unit_versions (code, valid_from, valid_to, official_code, unit_type, name, full_name, parent_code, catalog_version_id)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [unit.code, unit.validFrom, unit.validTo, unit.officialCode, unit.unitType, unit.name, unit.fullName, unit.parentCode, catalogId],
+    );
+  }
+  for (const s of successions) {
+    await client.query(
+      `insert into location.successions (from_code, to_code, kind, is_whole, basis, effective_on, catalog_version_id)
+       values ($1, $2, $3, $4, $5, $6, $7)`,
+      [s.fromCode, s.toCode, s.kind, s.isWhole, s.basis, s.effectiveOn, catalogId],
+    );
+  }
+};
