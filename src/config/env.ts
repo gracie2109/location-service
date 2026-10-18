@@ -9,6 +9,10 @@ const envSchema = z.object({
   PUBLIC_RATE_LIMIT_PER_MIN: z.coerce.number().int().min(1).max(100_000).default(60),
   /** Number of reverse proxies in front of the service whose X-Forwarded-For is trusted (0 = none). */
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
+  /** Only the GHN sync command needs these; the API never calls GHN. */
+  GHN_TOKEN: z.string().min(1).optional(),
+  GHN_SHOP_ID: z.string().regex(/^[0-9]+$/).optional(),
+  GHN_BASE_URL: z.url().default("https://online-gateway.ghn.vn"),
   CATALOG_REFRESH_SECONDS: z.coerce.number().int().min(1).max(3600).default(60),
 });
 
