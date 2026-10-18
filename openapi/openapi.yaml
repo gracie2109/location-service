@@ -1,0 +1,758 @@
+openapi: 3.1.0
+info:
+  title: Location Service API
+  version: 1.0.0-draft
+  summary: Vietnamese administrative units (current and historical), search, and carrier code mappings.
+  description: |
+    Provider-independent catalog of Vietnamese administrative units.
+
+    Identifiers:
+    - `code`: stable, opaque identifier issued by this service (`vn_` + 20 random base32 chars).
+      Never derived from names, never reused, never changes.
+    - `official_code`: code issued by the Vietnamese state (2 digits for provinces, 5 for communes,
+      3 for historical districts), always a string to keep leading zeros. Null when the source has none.
+    - Carrier codes (e.g. GHN) appear only under `/provider-codes`.
+
+    Compatibility: within v1 only additive changes are made. Clients must ignore unknown fields and
+    tolerate unknown enum values. Fields that can be absent are always present with `null`.
+
+    All example values in this document are illustrative, not real catalog data.
+  license:
+    name: Proprietary (draft)
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: https://location-service.example.invalid/api/v1
+    description: Placeholder; set at deployment
+tags:
+  - name: Catalog
+    description: Provinces, communes and catalog versions.
+  - name: Locations
+    description: Single units, history and search.
+  - name: Providers
+    description: Carrier code mappings (API key required).
+  - name: Health
+    description: Liveness and readiness probes.
+security: []
+
+paths:
+  /provinces:
+    get:
+      tags: [Catalog]
+      operationId: listProvinces
+      summary: List provinces and centrally governed cities
+      description: Returns every province in force on `as_of` (default today). Not paginated.
+      parameters:
+        - $ref: '#/components/parameters/AsOf'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: Provinces
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Cache-Control: { $ref: '#/components/headers/PublicCache' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Location' }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
+              example:
+                data:
+                  - code: vn_0a1b2c3d4e5f6g7h8j9k
+                    level: province
+                    unit_type: province
+                    official_code: '00'
+                    name: Ví Dụ
+                    full_name: Tỉnh Ví Dụ
+                    name_en: Vi Du
+                    full_name_en: Vi Du Province
+                    parent_code: null
+                    status: active
+                    effective_from: '2025-07-01'
+                    effective_to: null
+                    centroid: null
+                meta: { catalog_version: gso-2025-07-01, next_cursor: null, limit: null }
+        '304': { $ref: '#/components/responses/NotModified' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /provinces/{code}/communes:
+    get:
+      tags: [Catalog]
+      operationId: listCommunes
+      summary: List communes, wards and special zones of a province
+      parameters:
+        - $ref: '#/components/parameters/Code'
+        - name: q
+          in: query
+          description: Optional filter by name, with or without diacritics (2-100 chars).
+          schema: { type: string, minLength: 2, maxLength: 100 }
+        - name: unit_type
+          in: query
+          description: Comma-separated unit types to keep.
+          style: form
+          explode: false
+          schema:
+            type: array
+            items: { $ref: '#/components/schemas/UnitType' }
+        - $ref: '#/components/parameters/AsOf'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Communes of the province
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Cache-Control: { $ref: '#/components/headers/PublicCache' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Location' }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
+              example:
+                data:
+                  - code: vn_7k2m9q4x8c1t5r3w6y0z
+                    level: commune
+                    unit_type: ward
+                    official_code: '00000'
+                    name: Ví Dụ
+                    full_name: Phường Ví Dụ
+                    name_en: Vi Du
+                    full_name_en: Vi Du Ward
+                    parent_code: vn_0a1b2c3d4e5f6g7h8j9k
+                    status: active
+                    effective_from: '2025-07-01'
+                    effective_to: null
+                    centroid: null
+                meta: { catalog_version: gso-2025-07-01, next_cursor: null, limit: 50 }
+        '304': { $ref: '#/components/responses/NotModified' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/CursorStale' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /locations/{code}:
+    get:
+      tags: [Locations]
+      operationId: getLocation
+      summary: Get one administrative unit by its stable code
+      description: Works for retired units too; `status` says whether it is in force.
+      parameters:
+        - $ref: '#/components/parameters/Code'
+        - $ref: '#/components/parameters/AsOf'
+      responses:
+        '200':
+          description: The unit, as it was on `as_of` (default today, or its last version if retired)
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Cache-Control: { $ref: '#/components/headers/PublicCache' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { $ref: '#/components/schemas/LocationDetail' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '304': { $ref: '#/components/responses/NotModified' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /locations/{code}/history:
+    get:
+      tags: [Locations]
+      operationId: getLocationHistory
+      summary: Attribute versions, predecessors and successors of a unit
+      parameters:
+        - $ref: '#/components/parameters/Code'
+      responses:
+        '200':
+          description: History
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Cache-Control: { $ref: '#/components/headers/PublicCache' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { $ref: '#/components/schemas/LocationHistory' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+              example:
+                data:
+                  code: vn_7k2m9q4x8c1t5r3w6y0z
+                  versions:
+                    - effective_from: '2025-07-01'
+                      effective_to: null
+                      official_code: '00000'
+                      unit_type: ward
+                      name: Ví Dụ
+                      full_name: Phường Ví Dụ
+                      parent_code: vn_0a1b2c3d4e5f6g7h8j9k
+                  predecessors:
+                    - code: vn_q8w7e6r5t4y3a2b1c0p9
+                      full_name: Xã Cũ Ví Dụ
+                      kind: merged_into
+                      is_whole: true
+                      basis: Nghị quyết số ví dụ
+                      effective_on: '2025-07-01'
+                  successors: []
+                meta: { catalog_version: gso-2025-07-01 }
+        '304': { $ref: '#/components/responses/NotModified' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /search:
+    get:
+      tags: [Locations]
+      operationId: searchLocations
+      summary: Search units by Vietnamese name, with or without diacritics
+      description: |
+        The query is NFC-normalised, lower-cased, stripped of diacritics (đ → d) and of a leading unit
+        type word ("p.", "phường", "xa"...). Ranking: exact match, then prefix, then trigram similarity.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2, maxLength: 100 }
+        - name: level
+          in: query
+          style: form
+          explode: false
+          schema:
+            type: array
+            items: { $ref: '#/components/schemas/Level' }
+        - name: province
+          in: query
+          description: Restrict to communes of this province code.
+          schema: { $ref: '#/components/schemas/LocationCode' }
+        - name: include_retired
+          in: query
+          schema: { type: boolean, default: false }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Matches, best first
+          headers:
+            Cache-Control: { $ref: '#/components/headers/PublicCache' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/SearchHit' }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/CursorStale' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /catalog:
+    get:
+      tags: [Catalog]
+      operationId: getCurrentCatalog
+      summary: The catalog version in force, with provenance
+      responses:
+        '200':
+          description: Current catalog
+          headers:
+            Cache-Control: { $ref: '#/components/headers/PublicCache' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/CatalogVersion' }
+              example:
+                data:
+                  id: gso-2025-07-01
+                  source: gso
+                  source_ref: QĐ 19/2025/QĐ-TTg; danhmuchanhchinh.gso.gov.vn
+                  effective_on: '2025-07-01'
+                  extracted_at: '2026-10-20T02:00:00Z'
+                  file_sha256: '0000000000000000000000000000000000000000000000000000000000000000'
+                  record_counts: { province: 0, commune: 0 }
+                  is_current: true
+                  imported_at: '2026-10-20T03:00:00Z'
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/CatalogUnavailable' }
+
+  /catalog/versions:
+    get:
+      tags: [Catalog]
+      operationId: listCatalogVersions
+      summary: All imported catalog versions, newest first
+      responses:
+        '200':
+          description: Versions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/CatalogVersion' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /catalog/snapshot:
+    get:
+      tags: [Catalog]
+      operationId: getCatalogSnapshot
+      summary: Full catalog of one version as NDJSON, for consumer-side caches
+      description: |
+        One JSON object per line: first a `{"type":"catalog", ...CatalogVersion}` line, then
+        `{"type":"location", ...Location}` lines (current and retired units), then
+        `{"type":"succession", ...}` lines. With scope `provider-codes:read` and `providers=ghn`,
+        `{"type":"provider_code", ...ProviderCode}` lines follow.
+      security:
+        - apiKey: []
+      parameters:
+        - name: version
+          in: query
+          description: Catalog version id; default the current one.
+          schema: { type: string }
+        - name: providers
+          in: query
+          style: form
+          explode: false
+          schema:
+            type: array
+            items: { $ref: '#/components/schemas/Provider' }
+      responses:
+        '200':
+          description: Snapshot
+          headers:
+            Cache-Control:
+              schema: { type: string, const: 'private, no-store' }
+          content:
+            application/x-ndjson:
+              schema: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /locations/{code}/provider-codes:
+    get:
+      tags: [Providers]
+      operationId: getProviderCodes
+      summary: Carrier codes mapped to a unit
+      description: Only confirmed mappings are returned. An empty list means the unit is not mapped yet.
+      security:
+        - apiKey: []
+      parameters:
+        - $ref: '#/components/parameters/Code'
+        - name: provider
+          in: query
+          schema: { $ref: '#/components/schemas/Provider' }
+      responses:
+        '200':
+          description: Mappings
+          headers:
+            Cache-Control:
+              schema: { type: string, const: 'private, no-store' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ProviderCode' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /provider-codes/{provider}/{providerCode}:
+    get:
+      tags: [Providers]
+      operationId: lookupProviderCode
+      summary: Find the unit mapped to a carrier code
+      security:
+        - apiKey: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/Provider' }
+        - name: providerCode
+          in: path
+          required: true
+          schema: { type: string, maxLength: 40 }
+        - name: provider_model
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/ProviderModel' }
+      responses:
+        '200':
+          description: The mapping and its unit
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: object
+                    required: [mapping, location]
+                    properties:
+                      mapping: { $ref: '#/components/schemas/ProviderCode' }
+                      location: { $ref: '#/components/schemas/Location' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /health:
+    servers:
+      - url: https://location-service.example.invalid
+    get:
+      tags: [Health]
+      operationId: health
+      summary: Liveness
+      responses:
+        '200':
+          description: Process is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, const: ok }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /ready:
+    servers:
+      - url: https://location-service.example.invalid
+    get:
+      tags: [Health]
+      operationId: ready
+      summary: Readiness (database reachable and a current catalog loaded)
+      responses:
+        '200':
+          description: Ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, const: ready }
+                  catalog_version: { type: [string, 'null'] }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/CatalogUnavailable' }
+
+components:
+  securitySchemes:
+    apiKey:
+      type: http
+      scheme: bearer
+      bearerFormat: 'lsk_<prefix>_<secret>'
+      description: Server-to-server key with scopes `catalog:snapshot` and/or `provider-codes:read`.
+
+  parameters:
+    Code:
+      name: code
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/LocationCode' }
+    AsOf:
+      name: as_of
+      in: query
+      description: Date (Asia/Ho_Chi_Minh) to evaluate the catalog at; default today.
+      schema: { type: string, format: date }
+    Sort:
+      name: sort
+      in: query
+      schema: { type: string, enum: [name, official_code], default: name }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 500, default: 50 }
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque cursor from `meta.next_cursor`; tied to the catalog version.
+      schema: { type: string, maxLength: 200 }
+
+  headers:
+    ETag:
+      description: Catalog version plus a hash of the query.
+      schema: { type: string }
+    PublicCache:
+      schema: { type: string, example: 'public, max-age=3600, stale-while-revalidate=86400' }
+
+  schemas:
+    LocationCode:
+      type: string
+      pattern: '^vn_[0-9a-hjkmnp-tv-z]{20}$'
+      description: Stable opaque identifier issued by this service (Crockford base32, lower case).
+      example: vn_7k2m9q4x8c1t5r3w6y0z
+
+    Level:
+      type: string
+      enum: [province, district, commune]
+      description: |
+        `province`: cấp tỉnh. `commune`: cấp xã (xã, phường, đặc khu). `district`: cấp huyện,
+        historical only (abolished 2025-07-01). New values may be added.
+
+    UnitType:
+      type: string
+      enum: [province, municipality, ward, commune, special_zone, urban_district, rural_district, town, provincial_city, township]
+      description: |
+        province = tỉnh; municipality = thành phố trực thuộc trung ương; ward = phường; commune = xã;
+        special_zone = đặc khu; historical: urban_district = quận, rural_district = huyện,
+        town = thị xã, provincial_city = thành phố thuộc tỉnh, township = thị trấn. New values may be added.
+
+    Centroid:
+      type: [object, 'null']
+      description: WGS 84 (EPSG:4326) decimal degrees. `null` when no trustworthy source exists.
+      required: [latitude, longitude]
+      properties:
+        latitude: { type: number, minimum: -90, maximum: 90 }
+        longitude: { type: number, minimum: -180, maximum: 180 }
+
+    Location:
+      type: object
+      required: [code, level, unit_type, official_code, name, full_name, name_en, full_name_en, parent_code, status, effective_from, effective_to, centroid]
+      properties:
+        code: { $ref: '#/components/schemas/LocationCode' }
+        level: { $ref: '#/components/schemas/Level' }
+        unit_type: { $ref: '#/components/schemas/UnitType' }
+        official_code:
+          type: [string, 'null']
+          pattern: '^[0-9]{2,5}$'
+          description: State-issued code (string, leading zeros kept).
+        name: { type: string, description: Vietnamese name without the unit-type word. }
+        full_name: { type: string, description: Official Vietnamese name. }
+        name_en: { type: [string, 'null'], description: 'English/ASCII name; see `en_names_source` on the detail.' }
+        full_name_en: { type: [string, 'null'] }
+        parent_code:
+          oneOf:
+            - $ref: '#/components/schemas/LocationCode'
+            - type: 'null'
+        status: { type: string, enum: [active, retired] }
+        effective_from: { type: string, format: date }
+        effective_to: { type: [string, 'null'], format: date }
+        centroid: { $ref: '#/components/schemas/Centroid' }
+
+    LocationDetail:
+      allOf:
+        - $ref: '#/components/schemas/Location'
+        - type: object
+          required: [parent, en_names_source, centroid_source, replaced_by]
+          properties:
+            parent:
+              oneOf:
+                - $ref: '#/components/schemas/LocationRef'
+                - type: 'null'
+            en_names_source:
+              type: [string, 'null']
+              enum: [derived, official, null]
+              description: '`derived`: generated by the published transliteration rule, not an official translation.'
+            centroid_source: { type: [string, 'null'], description: 'Dataset the centroid came from, with licence.' }
+            replaced_by:
+              type: array
+              description: Successors when retired; empty when active.
+              items: { $ref: '#/components/schemas/SuccessionLink' }
+
+    LocationRef:
+      type: object
+      required: [code, level, full_name, official_code]
+      properties:
+        code: { $ref: '#/components/schemas/LocationCode' }
+        level: { $ref: '#/components/schemas/Level' }
+        full_name: { type: string }
+        official_code: { type: [string, 'null'] }
+
+    SuccessionLink:
+      type: object
+      required: [code, full_name, kind, is_whole, basis, effective_on]
+      properties:
+        code: { $ref: '#/components/schemas/LocationCode' }
+        full_name: { type: string }
+        kind: { type: string, enum: [replaced_by, merged_into, split_into, part_transferred_to] }
+        is_whole:
+          type: boolean
+          description: true when the whole old unit belongs to the new one. When false, never convert addresses automatically.
+        basis: { type: string, description: 'Legal basis, for example a resolution number.' }
+        effective_on: { type: string, format: date }
+
+    LocationHistory:
+      type: object
+      required: [code, versions, predecessors, successors]
+      properties:
+        code: { $ref: '#/components/schemas/LocationCode' }
+        versions:
+          type: array
+          items:
+            type: object
+            required: [effective_from, effective_to, official_code, unit_type, name, full_name, parent_code]
+            properties:
+              effective_from: { type: string, format: date }
+              effective_to: { type: [string, 'null'], format: date }
+              official_code: { type: [string, 'null'] }
+              unit_type: { $ref: '#/components/schemas/UnitType' }
+              name: { type: string }
+              full_name: { type: string }
+              parent_code:
+                oneOf:
+                  - $ref: '#/components/schemas/LocationCode'
+                  - type: 'null'
+        predecessors:
+          type: array
+          items: { $ref: '#/components/schemas/SuccessionLink' }
+        successors:
+          type: array
+          items: { $ref: '#/components/schemas/SuccessionLink' }
+
+    SearchHit:
+      allOf:
+        - $ref: '#/components/schemas/Location'
+        - type: object
+          required: [province, score]
+          properties:
+            province:
+              oneOf:
+                - $ref: '#/components/schemas/LocationRef'
+                - type: 'null'
+            score: { type: number, minimum: 0, maximum: 1 }
+
+    Provider:
+      type: string
+      enum: [ghn]
+      description: New providers may be added.
+
+    ProviderModel:
+      type: string
+      enum: [ghn_v2, ghn_legacy]
+      description: '`ghn_v2`: GHN two-level master data. `ghn_legacy`: GHN province/district/ward ids.'
+
+    ProviderCode:
+      type: object
+      required: [code, provider, provider_model, provider_code, provider_parent_code, provider_name, match_method, verified_at]
+      properties:
+        code: { $ref: '#/components/schemas/LocationCode' }
+        provider: { $ref: '#/components/schemas/Provider' }
+        provider_model: { $ref: '#/components/schemas/ProviderModel' }
+        provider_code: { type: string, description: 'The provider''s own id (e.g. GHN WardCode), as a string.' }
+        provider_parent_code: { type: [string, 'null'], description: 'Extra parent id the provider needs (e.g. GHN DistrictID for ghn_legacy).' }
+        provider_name: { type: string, description: Provider's name for the unit at mapping time. }
+        match_method: { type: string, enum: [official_code, confirmed] }
+        verified_at: { type: string, format: date-time }
+
+    CatalogVersion:
+      type: object
+      required: [id, source, source_ref, effective_on, extracted_at, file_sha256, record_counts, is_current, imported_at]
+      properties:
+        id: { type: string }
+        source: { type: string, enum: [gso, legacy_gso, fixture] }
+        source_ref: { type: string }
+        effective_on: { type: string, format: date }
+        extracted_at: { type: string, format: date-time }
+        file_sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        record_counts:
+          type: object
+          additionalProperties: { type: integer, minimum: 0 }
+        is_current: { type: boolean }
+        imported_at: { type: string, format: date-time }
+
+    Meta:
+      type: object
+      required: [catalog_version]
+      properties:
+        catalog_version: { type: string }
+
+    ListMeta:
+      allOf:
+        - $ref: '#/components/schemas/Meta'
+        - type: object
+          required: [next_cursor, limit]
+          properties:
+            next_cursor: { type: [string, 'null'] }
+            limit: { type: [integer, 'null'] }
+
+    Problem:
+      type: object
+      description: RFC 9457 problem details with a stable `code`.
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri-reference }
+        title: { type: string }
+        status: { type: integer }
+        code:
+          type: string
+          enum: [invalid_parameter, not_found, cursor_stale, unauthorized, forbidden, rate_limited, catalog_unavailable, internal]
+        detail: { type: string }
+        instance: { type: string }
+        errors:
+          type: array
+          description: Per-parameter problems for invalid_parameter.
+          items:
+            type: object
+            required: [parameter, message]
+            properties:
+              parameter: { type: string }
+              message: { type: string }
+
+  responses:
+    NotModified:
+      description: Not modified (If-None-Match matched)
+    BadRequest:
+      description: Invalid parameter
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example: { type: about:blank, title: Invalid parameter, status: 400, code: invalid_parameter, errors: [{ parameter: q, message: must be 2-100 characters }] }
+    NotFound:
+      description: Unknown code or version
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example: { type: about:blank, title: Not found, status: 404, code: not_found }
+    CursorStale:
+      description: The catalog version changed since the cursor was issued; restart paging
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: Missing or invalid API key
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: The key lacks the needed scope
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    RateLimited:
+      description: Too many requests
+      headers:
+        Retry-After:
+          schema: { type: integer }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    CatalogUnavailable:
+      description: No catalog loaded or database unreachable
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }

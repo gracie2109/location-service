@@ -1,0 +1,14 @@
+# Local development only. The database is used from step S2 on.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: location
+      POSTGRES_PASSWORD: location
+      POSTGRES_DB: location
+    ports:
+      - "5432:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+volumes:
+  dbdata:
