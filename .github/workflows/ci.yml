@@ -8,6 +8,22 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: location
+          POSTGRES_PASSWORD: location
+          POSTGRES_DB: location
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U location"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://location:location@localhost:5432/location
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -18,5 +34,10 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      - name: Migrations roll back and apply again
+        run: |
+          export DATABASE_URL="$TEST_DATABASE_URL"
+          npm run migrate:down
+          npm run migrate
       - run: npm run build
       - run: npm run lint:openapi

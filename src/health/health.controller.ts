@@ -1,15 +1,20 @@
 import { Controller, Get, ServiceUnavailableException } from "@nestjs/common";
+import { ReadinessService } from "./readiness.service";
 
 @Controller()
 export class HealthController {
+  constructor(private readonly readiness: ReadinessService) {}
+
   @Get("health")
   health() {
     return { status: "ok" };
   }
 
-  /** Not ready until a catalog is loaded (added with the database in S2/S3). */
+  /** Ready once the database answers and a current catalog version exists. */
   @Get("ready")
-  ready() {
-    throw new ServiceUnavailableException();
+  async ready() {
+    const catalogVersion = await this.readiness.currentCatalogVersion();
+    if (!catalogVersion) throw new ServiceUnavailableException();
+    return { status: "ready", catalog_version: catalogVersion };
   }
 }

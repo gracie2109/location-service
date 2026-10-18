@@ -9,6 +9,7 @@ const bootstrap = async (): Promise<void> => {
   const env = loadEnv();
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   configureApp(app);
+  app.enableShutdownHooks();
   await app.listen(env.PORT);
 };
 
