@@ -8,9 +8,11 @@ const OPTIONAL = ["name_en", "full_name_en", "en_names_source", "centroid_lat", 
 
 const TYPES_BY_LEVEL: Record<ImportLevel, UnitType[]> = {
   province: ["province", "municipality"],
-  commune: ["ward", "commune", "special_zone"],
+  district: ["urban_district", "rural_district", "town", "provincial_city"],
+  commune: ["ward", "commune", "special_zone", "township"],
 };
-const CODE_PATTERN: Record<ImportLevel, RegExp> = { province: /^[0-9]{2}$/, commune: /^[0-9]{5}$/ };
+const CODE_LENGTH: Record<ImportLevel, number> = { province: 2, district: 3, commune: 5 };
+const CODE_PATTERN: Record<ImportLevel, RegExp> = { province: /^[0-9]{2}$/, district: /^[0-9]{3}$/, commune: /^[0-9]{5}$/ };
 
 const number = (text: string): number | null => (text !== "" && Number.isFinite(Number(text)) ? Number(text) : null);
 
@@ -38,12 +40,12 @@ export const parseUnitsFile = (text: string): { units: ParsedUnit[]; issues: Fil
   for (const { line, values } of parsed.records) {
     const before = issues.length;
     const level = values.level as ImportLevel;
-    if (level !== "province" && level !== "commune") {
-      problem(line, `level must be province or commune, got "${values.level}"`);
+    if (level !== "province" && level !== "district" && level !== "commune") {
+      problem(line, `level must be province, district or commune, got "${values.level}"`);
       continue;
     }
     const officialCode = values.official_code ?? "";
-    if (!CODE_PATTERN[level].test(officialCode)) problem(line, `official_code "${officialCode}" is not ${level === "province" ? "2" : "5"} digits`);
+    if (!CODE_PATTERN[level].test(officialCode)) problem(line, `official_code "${officialCode}" is not ${CODE_LENGTH[level]} digits`);
     const unitType = values.unit_type as UnitType;
     if (!UNIT_TYPES.includes(unitType) || !TYPES_BY_LEVEL[level].includes(unitType)) {
       problem(line, `unit_type "${values.unit_type}" is not valid for level ${level}`);
@@ -53,8 +55,11 @@ export const parseUnitsFile = (text: string): { units: ParsedUnit[]; issues: Fil
 
     const parent = values.parent_official_code || null;
     if (level === "province" && parent) problem(line, "a province has no parent");
-    if (level === "commune" && !parent) problem(line, "a commune needs parent_official_code");
-    if (parent && !CODE_PATTERN.province.test(parent)) problem(line, `parent_official_code "${parent}" is not a province code`);
+    if (level !== "province" && !parent) problem(line, `a ${level} needs parent_official_code`);
+    if (parent && level === "district" && !CODE_PATTERN.province.test(parent)) problem(line, `parent_official_code "${parent}" is not a province code`);
+    if (parent && level === "commune" && !CODE_PATTERN.province.test(parent) && !CODE_PATTERN.district.test(parent)) {
+      problem(line, `parent_official_code "${parent}" is not a province or district code`);
+    }
 
     const key = `${level}:${officialCode}`;
     const first = seen.get(key);

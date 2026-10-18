@@ -5,7 +5,8 @@ import { runImport, type ImportOptions } from "../import/run-import";
 
 const USAGE = `Usage: node dist/cli/import.js catalog --units <units.csv> [--successions <successions.csv>]
   --source gso|legacy_gso|fixture --source-ref <text> --effective-on YYYY-MM-DD --extracted-at <ISO time>
-  [--id <catalog version id>] [--expect-provinces N] [--expect-communes N]
+  [--id <catalog version id>] [--expect-provinces N] [--expect-districts N] [--expect-communes N]
+  [--retire-level district]
   [--retire-without-successor] [--apply]
 
 Without --apply nothing is written: the import runs in a transaction that is rolled back and the report shows what would change.`;
@@ -33,7 +34,9 @@ const main = async (): Promise<void> => {
       "extracted-at": { type: "string" },
       id: { type: "string" },
       "expect-provinces": { type: "string" },
+      "expect-districts": { type: "string" },
       "expect-communes": { type: "string" },
+      "retire-level": { type: "string", multiple: true },
       "retire-without-successor": { type: "boolean", default: false },
       apply: { type: "boolean", default: false },
     },
@@ -60,6 +63,8 @@ const main = async (): Promise<void> => {
     apply: values.apply,
     retireWithoutSuccessor: values["retire-without-successor"],
     expectProvinces: optionalInt(values["expect-provinces"], "--expect-provinces"),
+    retireLevels: values["retire-level"],
+    expectDistricts: optionalInt(values["expect-districts"], "--expect-districts"),
     expectCommunes: optionalInt(values["expect-communes"], "--expect-communes"),
   };
 

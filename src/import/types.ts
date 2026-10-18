@@ -1,6 +1,6 @@
 import type { SuccessionKind, UnitType } from "../catalog/types";
 
-export type ImportLevel = "province" | "commune";
+export type ImportLevel = "province" | "district" | "commune";
 
 export type FileIssue = { file: string; line: number | null; message: string };
 
