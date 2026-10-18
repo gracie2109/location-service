@@ -14,6 +14,11 @@ Steps S1 (scaffold), S2 (schema), S3 (read API under `/api/v1`) and S4 (import C
 the official data file). No catalog data is included or invented; tests use fixtures marked as such.
 Import format and commands: [docs/import.md](docs/import.md).
 
+Provider endpoints (`/locations/{code}/provider-codes`, `/provider-codes/...`, `/catalog/snapshot`)
+need an API key. Create one with `npm run api-keys -- create --name <client> --scopes provider-codes:read`
+(printed once, only a hash is stored); `revoke` and `list` are the other commands. Public routes are
+limited per IP (`PUBLIC_RATE_LIMIT_PER_MIN`), keys per client; set `TRUST_PROXY_HOPS` behind a proxy.
+
 ## Develop
 
 ```bash
