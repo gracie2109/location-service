@@ -102,6 +102,34 @@ describe("buildPlan", () => {
     expect(plan.successions).toEqual([expect.objectContaining({ fromCode: "old90001", toCode: plan.added[0]?.code })]);
   });
 
+  it("retires a district without a successor only when its level is listed in retireLevels", async () => {
+    const district = current("901", { level: "district", unitType: "rural_district", parentCode: "old90" });
+    const common = { ...base, current: [current("90"), district], units: [unit("90")] };
+    expect(buildPlan(common, nextCode).errors[0]).toContain("--retire-level");
+    const plan = buildPlan({ ...common, retireLevels: ["district"] }, nextCode);
+    expect(plan.errors).toEqual([]);
+    expect(plan.retiredWithoutSuccessor.map((r) => r.officialCode)).toEqual(["901"]);
+  });
+
+  it("adds a district under its province and a commune under that district", () => {
+    const plan = buildPlan(
+      {
+        ...base,
+        current: [],
+        units: [
+          unit("90"),
+          unit("901", { level: "district", unitType: "rural_district", parentOfficialCode: "90" }),
+          unit("90100", { parentOfficialCode: "901" }),
+        ],
+      },
+      nextCode,
+    );
+    expect(plan.errors).toEqual([]);
+    const [province, district, commune] = plan.added;
+    expect(district?.parentCode).toBe(province?.code);
+    expect(commune?.parentCode).toBe(district?.code);
+  });
+
   it("reports successions that point nowhere", () => {
     const plan = buildPlan({ ...base, current: [current("90")], units: [unit("90")], successions: [succession("90009", "90")] }, nextCode);
     expect(plan.errors[0]).toContain("90009 is not a unit in force before this import");

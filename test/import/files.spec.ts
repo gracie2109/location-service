@@ -10,6 +10,21 @@ describe("parseUnitsFile", () => {
     expect(units.map((u) => [u.level, u.officialCode, u.parentOfficialCode])).toEqual([["province", "90", null], ["commune", "90001", "90"]]);
   });
 
+  it("reads districts: 3-digit code, a province as parent, a district type", () => {
+    const { units, issues } = parseUnitsFile(`${HEADER}\nprovince,90,province,Ví Dụ,Tỉnh Ví Dụ,\ndistrict,901,rural_district,Cũ Một,Huyện Cũ Một,90\ncommune,90100,commune,Cũ Một,Xã Cũ Một,901\n`);
+    expect(issues).toEqual([]);
+    expect(units.map((u) => [u.level, u.officialCode, u.parentOfficialCode])).toEqual([["province", "90", null], ["district", "901", "90"], ["commune", "90100", "901"]]);
+  });
+
+  it("rejects a district with the wrong code length, type or parent", () => {
+    const text = [HEADER, "district,90,rural_district,A,Huyện A,90", "district,902,ward,B,Huyện B,90", "district,903,rural_district,C,Huyện C,", "district,904,rural_district,D,Huyện D,90001"].join("\n");
+    const messages = parseUnitsFile(text).issues.map((i) => `${i.line}: ${i.message}`);
+    expect(messages.some((m) => m.startsWith("2:") && m.includes("3 digits"))).toBe(true);
+    expect(messages.some((m) => m.startsWith("3:") && m.includes("not valid for level district"))).toBe(true);
+    expect(messages.some((m) => m.startsWith("4:"))).toBe(true);
+    expect(messages.some((m) => m.startsWith("5:"))).toBe(true);
+  });
+
   it("keeps leading zeros of official codes", () => {
     const { units } = parseUnitsFile(`${HEADER}\nprovince,01,province,Một,Tỉnh Một,\n`);
     expect(units[0]?.officialCode).toBe("01");
@@ -23,7 +38,7 @@ describe("parseUnitsFile", () => {
       "commune,90002,ward,,Phường C,",
       "province,90,province,D,Tỉnh D,",
       "province,90,province,D,Tỉnh D,",
-      "district,901,rural_district,E,Huyện E,90",
+      "hamlet,901,rural_district,E,Huyện E,90",
     ].join("\n");
     const messages = parseUnitsFile(text).issues.map((i) => `${i.line}: ${i.message}`);
     expect(messages).toEqual(
@@ -33,7 +48,7 @@ describe("parseUnitsFile", () => {
         expect.stringContaining("4: name is empty"),
         expect.stringContaining("4: a commune needs parent_official_code"),
         expect.stringContaining("6: official_code 90 is repeated (first at line 5)"),
-        expect.stringContaining('7: level must be province or commune, got "district"'),
+        expect.stringContaining('7: level must be province, district or commune, got "hamlet"'),
       ]),
     );
   });
