@@ -643,8 +643,8 @@ components:
 
     ProviderModel:
       type: string
-      enum: [ghn_v2, ghn_legacy]
-      description: '`ghn_v2`: GHN two-level master data. `ghn_legacy`: GHN province/district/ward ids.'
+      enum: [ghn_v2]
+      description: '`ghn_v2`: GHN two-level master data (province and ward). More models may be added.'
 
     ProviderCode:
       type: object
@@ -654,9 +654,9 @@ components:
         provider: { $ref: '#/components/schemas/Provider' }
         provider_model: { $ref: '#/components/schemas/ProviderModel' }
         provider_code: { type: string, description: 'The provider''s own id (e.g. GHN WardCode), as a string.' }
-        provider_parent_code: { type: [string, 'null'], description: 'Extra parent id the provider needs (e.g. GHN DistrictID for ghn_legacy).' }
+        provider_parent_code: { type: [string, 'null'], description: 'The provider''s id of the parent unit (for a GHN ward, the GHN province id); null for provinces.' }
         provider_name: { type: string, description: Provider's name for the unit at mapping time. }
-        match_method: { type: string, enum: [official_code, confirmed] }
+        match_method: { type: string, enum: [confirmed], description: Every mapping is confirmed by a person. }
         verified_at: { type: string, format: date-time }
 
     CatalogVersion:

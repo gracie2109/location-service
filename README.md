@@ -38,3 +38,6 @@ invalid values. Errors are returned as `application/problem+json`.
 GHN mapping: `npm run providers -- ghn sync` (needs `GHN_TOKEN` and `GHN_SHOP_ID`, only sends GET requests,
 dry run unless `--apply`) records what GHN's two-level master data contains as proposals; a person confirms
 them with `ghn confirm` / `ghn reject`. GHN returns no state code, so nothing is linked automatically.
+When a unit is merged or GHN changes a code, `ghn replace` moves the GHN code to another unit and `ghn deactivate`
+switches a mapping off; both keep the old row with who, when and why. The import report lists live mappings on
+retired units (`provider_mappings_to_review`).

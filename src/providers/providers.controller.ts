@@ -10,7 +10,7 @@ import { ProvidersRepository } from "./providers.repository";
 
 const NO_STORE = "private, no-store";
 const PROVIDERS = ["ghn"] as const;
-const MODELS = ["ghn_v2", "ghn_legacy"] as const;
+const MODELS = ["ghn_v2"] as const;
 
 const forUnitQuery = z.object({ provider: z.enum(PROVIDERS).optional() });
 const lookupQuery = z.object({ provider_model: z.enum(MODELS) });

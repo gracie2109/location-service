@@ -2,6 +2,7 @@ import { parseArgs } from "node:util";
 import { Pool } from "pg";
 import { loadEnv } from "../config/env";
 import { confirmAllExact, confirmProposal, rejectProposal, type Decision } from "../providers/ghn/decisions";
+import { deactivateMapping, replaceMapping } from "../providers/ghn/lifecycle";
 import { GhnClient } from "../providers/ghn/ghn-client";
 import { runGhnSync } from "../providers/ghn/sync";
 
@@ -11,6 +12,8 @@ const USAGE = `Usage:
   node dist/cli/providers.js ghn confirm --code <ghn id> --unit <vn_...> --by <name>
   node dist/cli/providers.js ghn confirm --all-exact province|commune --by <name>
   node dist/cli/providers.js ghn reject --code <ghn id> --by <name>
+  node dist/cli/providers.js ghn deactivate --code <ghn id> --by <name> --reason "<why>"
+  node dist/cli/providers.js ghn replace --code <ghn id> --unit <vn_...> --by <name> --reason "<why>"
 
 \`sync\` only sends GET requests to GHN. Without --apply it writes nothing. Provinces must be confirmed
 before \`sync\` fetches their wards. Needs GHN_TOKEN and GHN_SHOP_ID in the environment.`;
@@ -80,6 +83,12 @@ const main = async (): Promise<void> => {
     } else if (command === "reject") {
       if (!values.code || !values.by) fail("--code and --by are required");
       printDecisions([await rejectProposal(pool, values.code ?? "", values.by ?? "")]);
+    } else if (command === "deactivate") {
+      if (!values.code || !values.by || !values.reason) fail("--code, --by and --reason are required");
+      printDecisions([await deactivateMapping(pool, values.code ?? "", values.by ?? "", values.reason ?? "")]);
+    } else if (command === "replace") {
+      if (!values.code || !values.unit || !values.by || !values.reason) fail("--code, --unit, --by and --reason are required");
+      printDecisions([await replaceMapping(pool, values.code ?? "", values.unit ?? "", values.by ?? "", values.reason ?? "")]);
     } else {
       fail("Unknown command.");
     }
