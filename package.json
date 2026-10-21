@@ -17,6 +17,7 @@
     "import": "node dist/cli/import.js",
     "api-keys": "node dist/cli/api-keys.js",
     "providers": "node dist/cli/providers.js",
+    "convert-gso": "node dist/cli/convert-gso.js",
     "migrate": "node-pg-migrate up --migrations-dir migrations",
     "migrate:down": "node-pg-migrate down --migrations-dir migrations",
     "lint:openapi": "redocly lint openapi/openapi.yaml"
@@ -42,6 +43,7 @@
     "@types/pg": "^8.23.1",
     "@types/supertest": "^7.2.1",
     "eslint": "^10.13.0",
+    "exceljs": "^4.4.0",
     "jest": "^30.5.2",
     "supertest": "^7.3.1",
     "ts-jest": "^29.4.15",

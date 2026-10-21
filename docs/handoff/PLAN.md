@@ -10,7 +10,7 @@ Trạng thái: ✓ xong · ✱ đang làm · ○ chưa.
 | S4 import CLI | ✓ #4 | |
 | S6a API key + provider-codes + snapshot | ✓ #5 | |
 | S6b đồng bộ GHN | ✓ #6 | |
-| **S5 nạp dữ liệu thật** | ✱ | xem dưới |
+| **S5 nạp dữ liệu thật** | ✓ code + dry-run, chờ merge | xem `STATE.md` |
 | S7 triển khai (Neon, Vercel, Cloudflare, backup) | ○ chặn | cần tài khoản + secrets của chị Grace |
 | P1–P5 (bong-cun dùng bản cache) | ○ | repo `gracie2109/bong-cun`, sau S7 |
 

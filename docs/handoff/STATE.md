@@ -1,43 +1,38 @@
 # STATE — trạng thái hiện tại (cập nhật 2026-10-19)
 
 ## Một câu
-Đã xong S1–S4, S6a, S6b (merge vào `main`). Đang làm **S5: nạp dữ liệu thật từ file Excel của Chính phủ**. Chị Grace đã **duyệt cách lưu dữ liệu** (xem `EXAMPLE-RESPONSES.md` và mục "Quyết định đã chốt" bên dưới). Vừa được yêu cầu dừng để bàn giao; **chưa nạp dữ liệu nào**, chưa viết converter.
+S1–S4, S6a, S6b và bản vá audit GHN (PR #7) đã merge vào `main`. **S5 (nạp dữ liệu thật) đã xong về code và đã dry-run thành công trên Postgres cục bộ**; đang chờ chị Grace xem báo cáo và PR S5 được merge. Chưa nạp gì vào database thật (chưa có database thật, S7 chưa làm).
 
 ## Repo / nhánh
-- Repo: github.com/gracie2109/location-service (public). `main` = `7fad29e` (sau PR #1–#6).
-- Nhánh đang làm: `feature/s5-gso-data` (đã push). Chứa: (1) commit `8657324` mở rộng importer cho cấp huyện; (2) commit bàn giao này (AGENTS.md, docs/handoff/*, file Excel gốc trong `data/gso/2025-07-01/`).
+- Repo: github.com/gracie2109/location-service (public). `main` = PR #7 (`f1a561c`).
+- Nhánh S5: `feature/s5-gso-data` (đã gộp `main`), gồm importer cấp huyện + test, converter `src/convert/*` + `src/cli/convert-gso.ts`, dữ liệu `data/gso/2025-07-01/*`, tài liệu bàn giao.
 
-## Đã xong và đã merge (đừng làm lại)
+## Đã xong
 | Bước | PR | Nội dung |
 | --- | --- | --- |
-| S1 | #1 | Scaffold NestJS, `/health`, `/ready`, problem+json, zod env, CI |
-| S2 | #2 | Schema `location` (migrations node-pg-migrate) |
-| S3 | #3 | API đọc `/api/v1`: danh sách, chi tiết, lịch sử, tìm kiếm, `as_of`, cursor, Cache-Control |
-| S4 | #4 | CLI import CSV (dry run mặc định, `--apply`, checksum idempotent, 1 transaction), `docs/import.md` |
-| S6a | #5 | API key (`lsk_<8>_<32>`, hash SHA-256), scope `catalog:snapshot`/`provider-codes:read`, rate limit in-memory, endpoint provider-codes + snapshot |
-| S6b | #6 | Đồng bộ GHN: `src/providers/ghn/*`, `src/cli/providers.ts`; đề xuất khớp tên, người xác nhận tay |
-Tại `main`: 149 test, CI xanh.
+| S1–S4 | #1–#4 | scaffold, schema, API đọc, import CLI |
+| S6a, S6b | #5, #6 | API key + provider-codes + snapshot, đồng bộ GHN |
+| Audit GHN | #7 | xác nhận kiểm đơn vị còn hiệu lực + đúng tỉnh, rollback, timeout/jitter/Retry-After, `ghn deactivate|replace`, báo cáo import liệt kê mapping bị ảnh hưởng, gỡ `ghn_legacy` (`docs/ke-hoach-audit-ghn.md`) |
+| S5 | PR S5 | importer cấp huyện + `--retire-level`/`--expect-districts`; converter xlsx → CSV có `corrections.csv` kiểm máy; `legacy-units.csv`, `units.csv`, `successions.csv`, `report.json`; test đơn vị + test dữ liệu thật |
 
-## Đang làm dở (nhánh `feature/s5-gso-data`)
-Đã sửa importer để nhận cấp **huyện** (`district`):
-- `src/import/types.ts`: `ImportLevel = province | district | commune`.
-- `src/import/units-file.ts`: kiểu đơn vị theo cấp (huyện: urban_district, rural_district, town, provincial_city; xã thêm `township`), độ dài mã (2/3/5), luật cha (huyện→tỉnh, xã→tỉnh hoặc huyện).
-- `src/import/plan.ts`: `retireLevels`; cho phép đơn vị cấp đó biến mất không có kế thừa (lỗi nhắc `--retire-level`); `parentLevel()` theo độ dài mã.
-- `src/import/report.ts`, `run-import.ts`, `src/cli/import.ts`: `districts_in_file`, `--expect-districts`, `--retire-level` (nhiều lần).
-- `typecheck` và `lint` sạch.
+## Kết quả dry-run S5 (Postgres cục bộ, đã `--apply` thử trên DB nháp `location_s5`)
+- Danh mục cũ (hiệu lực từ 2025-06-30): 63 tỉnh, 696 huyện, 10.030 xã. Thêm 10.789 đơn vị.
+- Danh mục mới (từ 2025-07-01): 34 tỉnh, 3.321 xã. Thêm 3.211, đổi 133 (cha huyện → tỉnh), giữ nguyên 11, ngừng 10.645 (691 không có kế thừa: huyện), 10.481 kế thừa.
+- Chạy lại cùng file báo `already_imported`. API trả đúng: lịch sử Phường Ba Đình có 10 tiền thân với căn cứ theo dòng, `as_of` trước 2025-06-30 trả 404.
+- 3 mã xã cũ trùng giữa hai xã khác nhau bị loại (00553, 01615, 02485): xem `report.json` `conflicts`.
 
-## Đang dừng ở đâu (điểm dừng chính xác)
-1. **1 test đang đỏ**: `test/import/files.spec.ts` › "reports every problem with its line" — vẫn mong dòng `7: level must be province or commune, got "district"`, nhưng cấp huyện giờ hợp lệ. Cách sửa: đổi dòng fixture số 7 thành một level sai thật (ví dụ `"hamlet"`) và thông báo mong đợi `level must be province, district or commune, got "hamlet"` (`src/import/units-file.ts:44`), rồi thêm test cho huyện (mã 3 số, cha là tỉnh, loại hợp lệ). 148/149 test còn lại xanh.
-2. Chưa có test cho `retireLevels`/district trong `test/import/plan.spec.ts` và `test/db/import.spec.ts`.
-3. Chưa cài `exceljs`, chưa viết converter, chưa sinh CSV, chưa dry-run.
-4. Chưa mở PR cho S5.
+## Việc tiếp theo
+1. Chị Grace xem báo cáo S5, rồi merge PR S5.
+2. S7 triển khai (chặn: cần tài khoản Neon + Vercel và secrets). Khi nạp DB thật: chạy dry-run trước, nạp danh mục cũ rồi danh mục mới (lệnh đầy đủ ở `data/gso/2025-07-01/README.md`).
+3. Đồng bộ GHN thật cần `GHN_TOKEN`, `GHN_SHOP_ID`; sau khi có catalog, `ghn sync` rồi `ghn confirm --all-exact province`, `ghn confirm --all-exact commune` sau khi xem mẫu.
+4. Hoãn: GĐ3 audit (`provider_sync_runs`, `last_seen_at`, trạng thái `gone`, so `parent_id` của GHN), GĐ5 (Action dry-run hằng tuần).
 
-## Việc tiếp theo (theo thứ tự) — xem chi tiết ở PLAN.md
-1. Sửa test đỏ + thêm test huyện/`retireLevels`.
-2. `npm i -D exceljs`; viết converter xlsx → CSV (`src/convert/gso-conversion.ts` thuần + CLI), file `corrections.csv` kiểm máy.
-3. Sinh `data/gso/2025-07-01/*` (legacy + current + successions + report).
-4. Dry-run trên Postgres cục bộ (legacy trước, current sau), **gửi báo cáo cho chị Grace xem**, chỉ `--apply` lên DB thật khi chị OK.
-5. PR, CI, squash merge.
+## Quyết định đã chốt với chị Grace (2026-10-19)
+1. Đơn vị cũ có `effective_from: "2025-06-30"` (nguồn `legacy_gso`); `as_of` trước ngày đó trả 404.
+2. Huyện cũ lưu ở cấp `district`, đã bãi bỏ, không có kế thừa (trừ 5 huyện → đặc khu). **Số huyện thật là 696**, không phải 745 như ước tính trước.
+3. `basis` = `Bảng chuyển đổi ĐVHC mới - cũ, dòng N: <ghi chú>` (file không có số nghị quyết).
+4. Kế thừa tỉnh cũ → tỉnh mới suy ra từ các dòng xã, ghi "suy ra".
+5. Nguồn sự thật = file Excel.
 
 ## Việc bị chặn (chờ chị Grace)
 - S7 triển khai: cần tài khoản Neon + Vercel và secrets (`DATABASE_URL`...). Chưa có.

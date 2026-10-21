@@ -1,0 +1,69 @@
+{
+  "source_rows": 10571,
+  "corrections_applied": 11,
+  "counts": {
+    "legacy": {
+      "provinces": 63,
+      "districts": 696,
+      "communes": 10030
+    },
+    "current": {
+      "provinces": 34,
+      "communes": 3321
+    },
+    "successions": {
+      "merged_into": 9512,
+      "part_transferred_to": 964,
+      "replaced_by": 5
+    },
+    "identity_communes": 133,
+    "identity_provinces": 11
+  },
+  "conflicts": [
+    {
+      "level": "commune",
+      "code": "00553",
+      "variants": [
+        "Xã Cổ Bi (parent 018)",
+        "Xã Đặng Xá (parent 018)"
+      ],
+      "rows": [
+        98,
+        423,
+        426,
+        429
+      ]
+    },
+    {
+      "level": "commune",
+      "code": "01615",
+      "variants": [
+        "Xã Hồng Quang (parent 049)",
+        "Xã Mỹ Hưng (parent 049)"
+      ],
+      "rows": [
+        909,
+        912
+      ]
+    },
+    {
+      "level": "commune",
+      "code": "02485",
+      "variants": [
+        "Xã Công Đa (parent 075)",
+        "Xã Phú Thịnh (parent 075)"
+      ],
+      "rows": [
+        1253,
+        1260
+      ]
+    }
+  ],
+  "new_communes_without_predecessor": [],
+  "legacy_units_without_successor": {
+    "provinces": [],
+    "communes": []
+  },
+  "warnings": [],
+  "errors": []
+}

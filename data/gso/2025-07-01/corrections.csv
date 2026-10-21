@@ -1,0 +1,12 @@
+row,field,expected,replacement,reason
+6211,old_province,Quảng Trị (44),Tỉnh Quảng Trị (45),Cồn Cỏ belongs to old Quảng Trị (45); 44 is old Quảng Bình and every other row uses 44 for Quảng Bình
+8914,old_province,Tỉnh Tiền Giang (82),Tỉnh Long An (80),Thành phố Tân An (794) is in old Long An (80); the other 12 rows of the district say 80
+10030,old_province,Tỉnh An Giang (89),Tỉnh Kiên Giang (91),Thành phố Hà Tiên (900) is in old Kiên Giang (91); the other 6 rows of the district say 91
+7559,old_name,Xuân Quang 3,Xã Xuân Quang 3,the type word is missing
+7560,old_name,Xuân Phước,Xã Xuân Phước,the type word is missing
+7742,new_name,Xa Ea Kly,Xã Ea Kly,typo in the type word
+7743,new_name,Xa Ea Kly,Xã Ea Kly,typo in the type word
+10460,old_name,Thi trấn Ngan Dừa,Thị trấn Ngan Dừa,typo in the type word
+2331,new_name,Xã Điềm Thuỵ,Xã Điềm Thụy,the same unit is spelled Thụy in row 2330 and in the old name of row 2331; Thụy is the spelling in use
+2332,new_name,Xã Điềm Thuỵ,Xã Điềm Thụy,same as row 2331
+2333,new_name,Xã Điềm Thuỵ,Xã Điềm Thụy,same as row 2331

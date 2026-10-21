@@ -24,15 +24,15 @@ Danh mục các đơn vị **đang hiệu lực từ `--effective-on`**.
 
 | Cột | Bắt buộc | Ghi chú |
 | --- | --- | --- |
-| `level` | có | `province` hoặc `commune` |
-| `official_code` | có | chuỗi: 2 chữ số (tỉnh) hoặc 5 chữ số (xã); giữ số 0 đầu |
-| `unit_type` | có | tỉnh: `province`, `municipality`; xã: `ward`, `commune`, `special_zone` |
+| `level` | có | `province`, `district` hoặc `commune` |
+| `official_code` | có | chuỗi: 2 chữ số (tỉnh), 3 chữ số (huyện) hoặc 5 chữ số (xã); giữ số 0 đầu |
+| `unit_type` | có | tỉnh: `province`, `municipality`; huyện: `urban_district`, `rural_district`, `town`, `provincial_city`; xã: `ward`, `commune`, `special_zone`, `township` |
 | `name`, `full_name` | có | tên không kèm loại và tên chính thức |
-| `parent_official_code` | có | để trống với tỉnh; xã bắt buộc, là mã tỉnh có trong file |
+| `parent_official_code` | có | để trống với tỉnh; huyện: mã tỉnh; xã: mã tỉnh hoặc mã huyện có trong file |
 | `name_en`, `full_name_en`, `en_names_source` | không | có tên tiếng Anh thì phải có nguồn: `derived` hoặc `official` |
 | `centroid_lat`, `centroid_lon`, `centroid_source` | không | đi cùng nhau, kèm nguồn và giấy phép |
 
-Dữ liệu lịch sử cấp huyện (`district`) chưa nạp bằng lệnh này; xem S5.
+Cấp huyện (`district`, mã 3 chữ số, cha là tỉnh) nạp được để làm danh mục lịch sử. Một xã có cha là tỉnh hoặc huyện. Dùng `--expect-districts N` để kiểm số huyện và `--retire-level district` (nhiều lần được) khi danh mục mới bỏ hẳn cấp đó và các đơn vị cấp đó biến mất không có kế thừa.
 
 ## `successions.csv`
 
@@ -52,3 +52,7 @@ Khớp theo `(level, official_code)`:
 - Có trong database nhưng không có trong file: ngừng hiệu lực. Phải có dòng kế thừa, nếu không import **dừng**; `--retire-without-successor` bỏ qua kiểm tra này và báo cáo ghi lại số đơn vị bị ảnh hưởng.
 
 Import dừng, không ghi gì, khi: file sai (báo từng dòng), số tỉnh/xã khác `--expect-*`, `--effective-on` không muộn hơn danh mục hiện hành, phiên bản hiện hành của một đơn vị đổi không bắt đầu trước `--effective-on`, kế thừa trỏ tới mã không có, hoặc id danh mục đã tồn tại với nội dung khác.
+
+## File của Cục Thống kê / Chính phủ
+
+`npm run convert-gso` chuyển bảng chuyển đổi `BangChuyendoi_VHCmoi_cu_final.xlsx` sang các CSV trên. Quy tắc, các lỗi nguồn đã sửa và lệnh nạp đầy đủ: [`data/gso/2025-07-01/README.md`](../data/gso/2025-07-01/README.md).
