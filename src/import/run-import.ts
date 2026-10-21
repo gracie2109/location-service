@@ -79,6 +79,16 @@ const insertVersion = async (
   );
 };
 
+/** Live carrier mappings on the units about to be retired, so nobody finds out from a wrong shipping fee. */
+const loadMappingsOfRetired = async (client: PoolClient, codes: string[]): Promise<ImportReport["provider_mappings_to_review"]> => {
+  if (codes.length === 0) return [];
+  const rows = await client.query<ImportReport["provider_mappings_to_review"][number]>(
+    "select code, provider, provider_code, provider_name from location.provider_codes where active and code = any($1) order by provider, provider_code",
+    [codes],
+  );
+  return rows.rows;
+};
+
 /** Writes the plan. Order matters: close old versions first so official codes and date ranges never clash. */
 const writePlan = async (client: PoolClient, plan: Plan, options: ImportOptions, catalogId: string): Promise<{ added: number; skipped: number }> => {
   for (const retire of plan.retired) {
@@ -192,6 +202,7 @@ export const runImport = async (pool: Pool, options: ImportOptions): Promise<Imp
         newUnitCode,
       );
       describePlan(report, plan);
+      report.provider_mappings_to_review = await loadMappingsOfRetired(client, plan.retired.map((entry) => entry.code));
       if (plan.errors.length > 0) {
         report.errors.push(...plan.errors);
         await client.query("rollback");

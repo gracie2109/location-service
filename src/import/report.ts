@@ -23,6 +23,8 @@ export type ImportReport = {
   added_codes: string[];
   changed: { official_code: string; fields: string[] }[];
   retired_codes: string[];
+  /** Live carrier mappings that point at units this import retires; each needs `ghn replace` or `ghn deactivate`. */
+  provider_mappings_to_review: { code: string; provider: string; provider_code: string; provider_name: string }[];
   errors: string[];
 };
 
@@ -48,6 +50,7 @@ export const emptyReport = (mode: ImportMode, fileSha256: string): ImportReport 
   added_codes: [],
   changed: [],
   retired_codes: [],
+  provider_mappings_to_review: [],
   errors: [],
 });
 
