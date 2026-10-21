@@ -1,0 +1,76 @@
+name: Load catalog
+
+# Run by hand from the Actions tab. Needs the repository secret DATABASE_URL (a direct, non-pooled
+# connection string). Without "apply" every import is a dry run: it writes nothing and only reports.
+on:
+  workflow_dispatch:
+    inputs:
+      step:
+        description: "What to run: migrate, legacy (catalog before 2025-07-01) or current (catalog from 2025-07-01, run legacy first)"
+        type: choice
+        required: true
+        options: [migrate, legacy, current]
+      apply:
+        description: "Write to the database. Leave off to see the report first."
+        type: boolean
+        default: false
+
+concurrency:
+  group: load-catalog
+  cancel-in-progress: false
+
+jobs:
+  load:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      APPLY: ${{ inputs.apply && '--apply' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Check the secret is set
+        run: test -n "$DATABASE_URL" || { echo "::error::Add the repository secret DATABASE_URL first"; exit 1; }
+      - run: npm ci
+      - run: npm run build
+
+      - name: Migrate (always forward, applies new migrations only)
+        if: inputs.step == 'migrate'
+        run: npm run migrate
+
+      - name: Import the catalog before 2025-07-01
+        if: inputs.step == 'legacy'
+        shell: bash
+        run: |
+          node dist/cli/import.js catalog --units data/gso/2025-07-01/legacy-units.csv \
+            --source legacy_gso --source-ref "Bảng chuyển đổi ĐVHC mới - cũ (cột trước 01/7/2025)" \
+            --effective-on 2025-06-30 --extracted-at 2026-10-18T19:54:00+07:00 --id legacy-gso-2025-06-30 \
+            --expect-provinces 63 --expect-districts 696 --expect-communes 10030 $APPLY | tee report.json
+
+      - name: Import the catalog from 2025-07-01
+        if: inputs.step == 'current'
+        shell: bash
+        run: |
+          node dist/cli/import.js catalog --units data/gso/2025-07-01/units.csv --successions data/gso/2025-07-01/successions.csv \
+            --source gso --source-ref "Bảng chuyển đổi ĐVHC mới - cũ (cột từ 01/7/2025)" \
+            --effective-on 2025-07-01 --extracted-at 2026-10-18T19:54:00+07:00 --id gso-2025-07-01 \
+            --expect-provinces 34 --expect-communes 3321 --retire-level district $APPLY | tee report.json
+
+      - name: Show the report
+        if: always() && inputs.step != 'migrate'
+        run: |
+          {
+            echo "### ${{ inputs.step }} import (apply: ${{ inputs.apply }})"
+            echo '```json'
+            jq 'del(.added_codes, .retired_codes)' report.json 2>/dev/null || echo "no report"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always() && inputs.step != 'migrate'
+        with:
+          name: import-report-${{ inputs.step }}
+          path: report.json
+          if-no-files-found: ignore
