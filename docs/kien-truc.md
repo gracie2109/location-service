@@ -193,7 +193,7 @@ unit_versions(code fk, valid_from, valid_to null, official_code, unit_type, name
               search_key generated)   -- exclusion constraint: không chồng ngày cùng code
 successions(from_code, to_code, kind, is_whole, basis, effective_on, catalog_version_id)
 provider_codes(code fk, provider, provider_model, provider_code, provider_parent_code, provider_name,
-               match_method 'official_code'|'confirmed', confirmed_by, confirmed_at, active)
+               match_method 'confirmed', confirmed_by, confirmed_at, active, deactivated_at, deactivated_by, deactivated_reason)
 provider_code_proposals(...)  -- kết quả đối chiếu chờ xác nhận
 api_clients(id, name, key_prefix, key_hash, scopes text[], rate_limit_per_min, created_at, revoked_at)
 ```
@@ -256,7 +256,7 @@ Quan hệ kế thừa nạp bằng `location-service import successions --file .
 
 ### 6.3 Mapping GHN
 
-`location-service providers ghn sync` chỉ gọi các endpoint **GET danh mục** của GHN bằng token của dịch vụ, rồi ghi vào `provider_code_proposals`. Dòng nào GHN trả kèm mã Nhà nước khớp thì tự nối (`official_code`). Còn lại chờ người xác nhận bằng `location-service providers confirm`. Không bao giờ nối theo tên. [CXM] Các trường của GHN "Province/Ward (New)" chưa đọc được (mục 2.3 tài liệu cũ), nên lệnh này viết sau khi đã đọc được tài liệu.
+`location-service providers ghn sync` chỉ gọi các endpoint **GET danh mục** của GHN bằng token của dịch vụ, rồi ghi vào `provider_code_proposals`. GHN không trả mã Nhà nước nên **không có gì được nối tự động**: sync chỉ đề xuất các khớp tên chính xác trong phạm vi tỉnh đã xác nhận, và mọi mapping do người xác nhận (`ghn confirm`, hoặc `ghn confirm --all-exact` cho các khớp tên duy nhất sau khi xem mẫu). Xác nhận bị từ chối nếu đơn vị đã hết hiệu lực hoặc thuộc tỉnh khác với tỉnh GHN của xã. Khi một đơn vị bị gộp hoặc GHN đổi mã, dùng `ghn replace` (chuyển mã GHN sang đơn vị mới) hoặc `ghn deactivate`; hàng cũ được giữ, kèm người làm, lý do và thời điểm. Báo cáo import liệt kê các mapping còn hiệu lực trên đơn vị bị ngừng (`provider_mappings_to_review`). [CXM] Các trường của GHN "Province/Ward (New)" chưa đọc được (mục 2.3 tài liệu cũ), nên lệnh này viết sau khi đã đọc được tài liệu.
 
 ### 6.4 Cập nhật khi có thay đổi chính thức
 
@@ -281,7 +281,7 @@ Location Service ──(GET /catalog/snapshot, API key)──► GitHub Action "
 - Pawtiny giữ **bản cache chỉ đọc của riêng mình** (bảng `location_units`, `location_provider_codes`) do job đồng bộ ghi. Nhờ vậy RPC của Pawtiny vẫn kiểm tra được mã bằng khóa ngoại, báo cáo theo địa bàn chạy được bằng SQL, và form địa chỉ vẫn chạy khi Location Service ngừng.
 - Đồng bộ bằng **PR sinh migration** (giống cách migration đang chạy tự động khi merge): có người đọc trước khi dữ liệu vào production, không cần thêm secret database. Secret cần thêm ở `bong-cun`: `LOCATION_SERVICE_URL`, `LOCATION_SERVICE_KEY` (scope `catalog:snapshot`, `provider-codes:read`).
 - Địa chỉ lưu `ward_location_code` (là `code` của dịch vụ) + `official_code` + tên chụp lại. Đơn hàng lưu snapshot như hiện nay. Không đọc gì từ dịch vụ khi hiển thị.
-- Địa chỉ cũ 3 cấp của GHN giữ nguyên (`location_model = 'ghn_legacy'`), không tự chuyển.
+- Địa chỉ cũ 3 cấp của GHN giữ nguyên ở phía Pawtiny, không tự chuyển. Dịch vụ này chỉ có mô hình hai cấp mới (`ghn_v2`); khi thực sự cần mô hình cũ thì thêm bằng một migration.
 - Tính phí GHN vẫn ở Nuxt server của Pawtiny, bằng tài khoản shop của Pawtiny, lấy mã GHN từ cache.
 - Client TypeScript sinh từ `openapi.yaml` nằm trong repo dịch vụ (`packages/client`, xuất bản lên GitHub Packages hoặc dùng git URL). Pawtiny chỉ dùng nó trong script đồng bộ.
 

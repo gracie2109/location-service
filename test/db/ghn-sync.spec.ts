@@ -1,6 +1,7 @@
 import { Pool } from "pg";
 import { confirmAllExact, confirmProposal, rejectProposal } from "../../src/providers/ghn/decisions";
 import { GhnClient } from "../../src/providers/ghn/ghn-client";
+import { deactivateMapping, replaceMapping } from "../../src/providers/ghn/lifecycle";
 import { runGhnSync } from "../../src/providers/ghn/sync";
 import { code, FIXTURE_SUCCESSIONS, FIXTURE_VERSION_ID, fixtureDbRows } from "../fixtures";
 import { clearCatalog, connect, insertFixtureCatalog, insertFixtureUnits, migrateUp, TEST_DATABASE_URL } from "./helpers";
@@ -110,6 +111,29 @@ describeDb("GHN sync and confirmation (needs TEST_DATABASE_URL)", () => {
     const open = await pool.query<{ n: string }>("select count(*) as n from pg_stat_activity where datname = current_database() and state like 'idle in transaction%'");
     expect(Number(open.rows[0]?.n)).toBe(0);
     expect(await confirmProposal(pool, "1003648", code(5), "tester")).toMatchObject({ ok: true });
+  });
+
+  it("moves a GHN code to the unit that replaced the old one, or switches it off, keeping the old row", async () => {
+    await runGhnSync(pool, client(), true);
+    await confirmAllExact(pool, "province", "tester");
+    await runGhnSync(pool, client(), true);
+    expect(await confirmProposal(pool, "1003648", code(5), "tester")).toMatchObject({ ok: true });
+
+    expect(await replaceMapping(pool, "1003648", code(4), "", "merged")).toMatchObject({ ok: false });
+    expect(await replaceMapping(pool, "1003648", code(8), "tester", "merged")).toMatchObject({ ok: false, message: expect.stringContaining("retired") });
+    expect(await replaceMapping(pool, "1003648", code(6), "tester", "merged")).toMatchObject({ ok: false, message: expect.stringContaining("another province") });
+    expect(await count("provider_codes", "provider_code = '1003648' and active")).toBe(1);
+
+    expect(await replaceMapping(pool, "1003648", code(4), "tester", "Xã Đảo merged into Beta")).toMatchObject({ ok: true });
+    const rows = await pool.query("select code, active, deactivated_by, deactivated_reason from location.provider_codes where provider_code = '1003648' order by id");
+    expect(rows.rows).toEqual([
+      { code: code(5), active: false, deactivated_by: "tester", deactivated_reason: "Xã Đảo merged into Beta" },
+      { code: code(4), active: true, deactivated_by: null, deactivated_reason: null },
+    ]);
+
+    expect(await deactivateMapping(pool, "1003648", "tester", "GHN removed the ward")).toMatchObject({ ok: true });
+    expect(await deactivateMapping(pool, "1003648", "tester", "again")).toMatchObject({ ok: false });
+    expect(await count("provider_codes", "provider_code = '1003648' and active")).toBe(0);
   });
 
   it("reports a confirmed mapping whose GHN record was renamed or switched off", async () => {

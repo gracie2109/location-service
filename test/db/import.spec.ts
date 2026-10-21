@@ -127,6 +127,20 @@ describeDb("runImport (needs TEST_DATABASE_URL)", () => {
     expect(versions.rows).toEqual([{ id: "fixture-2025-07-01", is_current: false }, { id: "fixture-2026-01-01", is_current: true }]);
   });
 
+  it("lists the live carrier mappings on units the import retires", async () => {
+    await runImport(pool, options(await write("v1.csv", V1), { apply: true }));
+    await pool.query(
+      `insert into location.provider_codes (code, provider, provider_model, provider_code, provider_name, match_method, confirmed_by)
+       select u.code, 'ghn', 'ghn_v2', '1003647', 'Xã Beta', 'confirmed', 'test'
+         from location.units u join location.unit_versions v using (code) where v.official_code = '90002'`,
+    );
+    const report = await runImport(
+      pool,
+      options(await write("v2.csv", V2), { effectiveOn: "2026-01-01", successionsFile: await write("s2.csv", SUCCESSIONS_V2) }),
+    );
+    expect(report.provider_mappings_to_review).toEqual([expect.objectContaining({ provider: "ghn", provider_code: "1003647", provider_name: "Xã Beta" })]);
+  });
+
   it("refuses a disappearing unit without a succession and leaves the database as it was", async () => {
     await runImport(pool, options(await write("v1.csv", V1), { apply: true }));
     const report = await runImport(pool, options(await write("v2.csv", V2), { apply: true, effectiveOn: "2026-01-01" }));
