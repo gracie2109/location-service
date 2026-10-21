@@ -36,6 +36,31 @@ describe("GhnClient", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 
+  it("gives every request a timeout and retries one that timed out", async () => {
+    const timeout = new DOMException("The operation was aborted due to timeout", "TimeoutError");
+    const fetchImpl = jest.fn().mockRejectedValueOnce(timeout).mockResolvedValueOnce(reply({ code: 200, data: [item(1)] }));
+    expect(await new GhnClient(config, fetchImpl, 0, 50).provinces()).toHaveLength(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect((fetchImpl.mock.calls[0] as [string, RequestInit])[1].signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("waits as long as Retry-After asks for", async () => {
+    jest.useFakeTimers();
+    try {
+      const fetchImpl = jest
+        .fn()
+        .mockResolvedValueOnce(new Response("{}", { status: 429, headers: { "Retry-After": "2" } }))
+        .mockResolvedValueOnce(reply({ code: 200, data: [item(1)] }));
+      const pending = new GhnClient(config, fetchImpl, 0).provinces();
+      await jest.advanceTimersByTimeAsync(1999);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(1);
+      expect(await pending).toHaveLength(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it("explains a 401 without retrying", async () => {
     const fetchImpl = jest.fn().mockResolvedValue(reply({}, 401));
     await expect(new GhnClient(config, fetchImpl, 0).provinces()).rejects.toThrow(/IP allow-list/);

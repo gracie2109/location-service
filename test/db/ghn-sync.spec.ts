@@ -97,6 +97,21 @@ describeDb("GHN sync and confirmation (needs TEST_DATABASE_URL)", () => {
     expect(await count("provider_codes", "active and provider_code = '1003648'")).toBe(1);
   });
 
+  it("refuses a retired unit or a unit of another province, and never leaves a transaction open", async () => {
+    await runGhnSync(pool, client(), true);
+    await confirmAllExact(pool, "province", "tester");
+    await runGhnSync(pool, client(), true);
+
+    expect(await confirmProposal(pool, "1003648", code(8), "tester")).toMatchObject({ ok: false, message: expect.stringContaining("retired") });
+    expect(await confirmProposal(pool, "1003648", code(6), "tester")).toMatchObject({ ok: false, message: expect.stringContaining("another province") });
+    expect(await confirmProposal(pool, "1003648", code(1), "tester")).toMatchObject({ ok: false });
+    expect(await count("provider_codes", "provider_code = '1003648'")).toBe(0);
+
+    const open = await pool.query<{ n: string }>("select count(*) as n from pg_stat_activity where datname = current_database() and state like 'idle in transaction%'");
+    expect(Number(open.rows[0]?.n)).toBe(0);
+    expect(await confirmProposal(pool, "1003648", code(5), "tester")).toMatchObject({ ok: true });
+  });
+
   it("reports a confirmed mapping whose GHN record was renamed or switched off", async () => {
     await runGhnSync(pool, client(), true);
     await confirmAllExact(pool, "province", "tester");
