@@ -15,3 +15,9 @@ Chạy lại cùng bước đã apply chỉ báo `already_imported`, không ghi 
 ## Chưa làm
 - Triển khai API (Vercel), cache Cloudflare, sao lưu hằng tuần: xem `docs/kien-truc.md` mục triển khai.
 - `ghn sync` cần `GHN_TOKEN` và `GHN_SHOP_ID` trong GitHub Secrets.
+
+## Chạy API trên Vercel
+
+- `api/index.js` là cổng vào của Vercel; nó nạp bản đã build trong `dist/` (`src/vercel.ts`), nên Vercel phải chạy `npm run build` (đã khai trong `vercel.json`).
+- Biến môi trường trên Vercel: `DATABASE_URL` (bắt buộc), `TRUST_PROXY_HOPS=1` (để giới hạn tốc độ theo IP thật của người gọi, vì Vercel đứng trước).
+- Kiểm tra sau khi deploy: `/health` trả 200, `/ready` trả 200 khi đã nạp danh mục, `/api/v1/provinces` trả danh sách tỉnh.
