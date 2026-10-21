@@ -15,7 +15,13 @@ export type PlanInput = {
   units: ParsedUnit[];
   successions: ParsedSuccession[];
   retireWithoutSuccessor: boolean;
+  /** Levels that may disappear without a succession (for example `district`, abolished on 2025-07-01). */
+  retireLevels?: string[];
 };
+
+/** The level a parent code belongs to, by its length: 2 digits province, 3 digits district. */
+const parentLevel = (officialCode: string): string => (officialCode.length === 2 ? "province" : "district");
+const LEVELS = ["province", "district", "commune"];
 
 const key = (level: string, officialCode: string): string => `${level}:${officialCode}`;
 
@@ -67,8 +73,9 @@ export const buildPlan = (input: PlanInput, newCode: () => string): Plan => {
   for (const { unit, existing, code } of pending) {
     let parentCode: string | null = null;
     if (unit.parentOfficialCode) {
-      parentCode = codeInNewState.get(key("province", unit.parentOfficialCode)) ?? null;
-      if (!parentCode) errors.push(`units line ${unit.line}: parent province ${unit.parentOfficialCode} is not in the file`);
+      const level = parentLevel(unit.parentOfficialCode);
+      parentCode = codeInNewState.get(key(level, unit.parentOfficialCode)) ?? null;
+      if (!parentCode) errors.push(`units line ${unit.line}: parent ${level} ${unit.parentOfficialCode} is not in the file`);
     }
     if (!existing) {
       added.push({ code, unit, parentCode });
@@ -98,11 +105,11 @@ export const buildPlan = (input: PlanInput, newCode: () => string): Plan => {
 
   const successions: PlannedSuccession[] = [];
   const resolveFrom = (officialCode: string): string | undefined => {
-    const matches = ["province", "commune"].map((level) => currentByOfficial.get(key(level, officialCode))).filter((unit) => unit !== undefined);
+    const matches = LEVELS.map((level) => currentByOfficial.get(key(level, officialCode))).filter((unit) => unit !== undefined);
     return matches.length === 1 ? matches[0]?.code : undefined;
   };
   const resolveTo = (officialCode: string): string | undefined => {
-    const matches = ["province", "commune"].map((level) => codeInNewState.get(key(level, officialCode))).filter((code) => code !== undefined);
+    const matches = LEVELS.map((level) => codeInNewState.get(key(level, officialCode))).filter((code) => code !== undefined);
     return matches.length === 1 ? matches[0] : undefined;
   };
   for (const row of input.successions) {
@@ -117,10 +124,12 @@ export const buildPlan = (input: PlanInput, newCode: () => string): Plan => {
 
   const withSuccessor = new Set(successions.map((succession) => succession.fromCode));
   const orphaned = retiredAll.filter((retire) => !withSuccessor.has(retire.code));
-  const retiredWithoutSuccessor = input.retireWithoutSuccessor ? orphaned : [];
-  if (!input.retireWithoutSuccessor && orphaned.length > 0) {
-    const sample = orphaned.slice(0, 10).map((retire) => retire.officialCode).join(", ");
-    errors.push(`${orphaned.length} unit(s) disappear without a succession (for example ${sample}); add them to the successions file or pass --retire-without-successor`);
+  const allowedLevels = new Set(input.retireLevels ?? []);
+  const retiredWithoutSuccessor = input.retireWithoutSuccessor ? orphaned : orphaned.filter((retire) => allowedLevels.has(retire.level));
+  const unexplained = orphaned.filter((retire) => !retiredWithoutSuccessor.includes(retire));
+  if (unexplained.length > 0) {
+    const sample = unexplained.slice(0, 10).map((retire) => retire.officialCode).join(", ");
+    errors.push(`${unexplained.length} unit(s) disappear without a succession (for example ${sample}); add them to the successions file, pass --retire-level for an abolished level, or --retire-without-successor`);
   }
 
   return { added, changed, unchanged, retired: retiredAll, retiredWithoutSuccessor, successions, errors };

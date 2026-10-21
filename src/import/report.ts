@@ -9,6 +9,7 @@ export type ImportReport = {
   file_sha256: string;
   counts: {
     provinces_in_file: number;
+    districts_in_file: number;
     communes_in_file: number;
     added: number;
     changed: number;
@@ -36,6 +37,7 @@ export const emptyReport = (mode: ImportMode, fileSha256: string): ImportReport 
   file_sha256: fileSha256,
   counts: {
     provinces_in_file: 0,
+    districts_in_file: 0,
     communes_in_file: 0,
     added: 0,
     changed: 0,

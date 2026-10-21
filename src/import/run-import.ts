@@ -19,7 +19,10 @@ export type ImportOptions = {
   catalogId?: string;
   apply: boolean;
   retireWithoutSuccessor: boolean;
+  /** Levels allowed to retire without a succession. */
+  retireLevels?: string[];
   expectProvinces?: number;
+  expectDistricts?: number;
   expectCommunes?: number;
 };
 
@@ -147,7 +150,11 @@ export const runImport = async (pool: Pool, options: ImportOptions): Promise<Imp
     const successionsFile = successionsBytes ? parseSuccessionsFile(successionsBytes.toString("utf8")) : { successions: [], issues: [] };
     report.errors.push(...formatIssues([...unitsFile.issues, ...successionsFile.issues]));
     report.counts.provinces_in_file = unitsFile.units.filter((unit) => unit.level === "province").length;
+    report.counts.districts_in_file = unitsFile.units.filter((unit) => unit.level === "district").length;
     report.counts.communes_in_file = unitsFile.units.filter((unit) => unit.level === "commune").length;
+    if (options.expectDistricts !== undefined && report.counts.districts_in_file !== options.expectDistricts) {
+      report.errors.push(`expected ${options.expectDistricts} districts, the file has ${report.counts.districts_in_file}`);
+    }
     if (options.expectProvinces !== undefined && report.counts.provinces_in_file !== options.expectProvinces) {
       report.errors.push(`expected ${options.expectProvinces} provinces, the file has ${report.counts.provinces_in_file}`);
     }
@@ -190,6 +197,7 @@ export const runImport = async (pool: Pool, options: ImportOptions): Promise<Imp
           units: unitsFile.units,
           successions: successionsFile.successions,
           retireWithoutSuccessor: options.retireWithoutSuccessor,
+          retireLevels: options.retireLevels,
         },
         newUnitCode,
       );
@@ -207,7 +215,11 @@ export const runImport = async (pool: Pool, options: ImportOptions): Promise<Imp
          values ($1, $2, $3, $4, $5, $6, $7, true)`,
         [
           catalogId, options.source, options.sourceRef, options.effectiveOn, options.extractedAt, fileSha,
-          JSON.stringify({ province: report.counts.provinces_in_file, commune: report.counts.communes_in_file }),
+          JSON.stringify({
+            province: report.counts.provinces_in_file,
+            ...(report.counts.districts_in_file > 0 ? { district: report.counts.districts_in_file } : {}),
+            commune: report.counts.communes_in_file,
+          }),
         ],
       );
       const written = await writePlan(client, plan, options, catalogId);
