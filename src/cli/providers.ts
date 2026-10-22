@@ -63,7 +63,9 @@ const main = async (): Promise<void> => {
     } else if (command === "list") {
       const limit = Number(values.limit ?? 100);
       const rows = await pool.query(
-        `select p.provider_code, p.level, p.provider_name, p.provider_parent_code, p.reason, p.suggested_code, p.candidate_codes, p.status
+        `select p.provider_code, p.level, p.provider_name, p.provider_parent_code, p.reason, p.suggested_code, p.candidate_codes, p.status,
+                (select coalesce(jsonb_agg(jsonb_build_object('code', v.code, 'name', v.full_name) order by v.code), '[]'::jsonb)
+                   from location.unit_versions v where v.valid_to is null and v.code = any (p.candidate_codes)) as candidates
            from location.provider_code_proposals p
           where p.provider = 'ghn' and p.status = $1 and ($2::text is null or p.reason = $2) and ($3::text is null or p.level = $3)
           order by p.level, p.provider_name limit $4`,
