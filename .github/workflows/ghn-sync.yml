@@ -13,6 +13,11 @@ on:
         description: "Write the result (sync only; false = dry run)"
         type: boolean
         default: false
+      environment:
+        description: "GHN environment the token belongs to"
+        type: choice
+        options: [production, test]
+        default: production
 
 permissions:
   contents: read
@@ -26,6 +31,7 @@ jobs:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       GHN_TOKEN: ${{ secrets.GHN_TOKEN }}
       GHN_SHOP_ID: ${{ secrets.GHN_SHOP_ID }}
+      GHN_BASE_URL: ${{ inputs.environment == 'test' && 'https://dev-online-gateway.ghn.vn' || 'https://online-gateway.ghn.vn' }}
       STEP: ${{ inputs.step }}
       APPLY: ${{ inputs.apply && '--apply' || '' }}
     steps:
