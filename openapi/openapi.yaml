@@ -648,11 +648,18 @@ components:
 
     ProviderCode:
       type: object
-      required: [code, provider, provider_model, provider_code, provider_parent_code, provider_name, match_method, verified_at]
+      required: [code, provider, provider_model, provider_environment, provider_code, provider_parent_code, provider_name, match_method, verified_at]
       properties:
         code: { $ref: '#/components/schemas/LocationCode' }
         provider: { $ref: '#/components/schemas/Provider' }
         provider_model: { $ref: '#/components/schemas/ProviderModel' }
+        provider_environment:
+          type: string
+          enum: [production, test]
+          description: >-
+            The provider gateway the mapping was read from. Ids from the `test` gateway must not be sent to the
+            provider's production API. A unit has one live mapping; when a production mapping replaces a test one the
+            test row is dropped from this list.
         provider_code: { type: string, description: 'The provider''s own id (e.g. GHN WardCode), as a string.' }
         provider_parent_code: { type: [string, 'null'], description: 'The provider''s id of the parent unit (for a GHN ward, the GHN province id); null for provinces.' }
         provider_name: { type: string, description: Provider's name for the unit at mapping time. }

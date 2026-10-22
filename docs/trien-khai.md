@@ -38,3 +38,7 @@ Cần secret `GHN_TOKEN`, `GHN_SHOP_ID` (và `DATABASE_URL`). Vào Actions > GHN
 4. `confirm-communes`: xác nhận các xã trùng tên hoàn toàn. Các ca còn lại (trùng tên nhiều nơi, không khớp) cần người xem bằng `list-pending`.
 
 Nếu GHN chặn IP của GitHub Actions thì bước `sync` sẽ báo lỗi; khi đó phải chạy tay từ máy đã được GHN cho phép.
+
+### Môi trường GHN của mapping
+
+Mỗi mapping ghi `provider_environment` (`test` hoặc `production`) theo input `environment` của workflow, và API trả trường này. Mã của gateway `test` không được dùng để tính phí trên gateway production. Khi đã có token production, chạy lại đúng bốn bước trên với `environment = production`: các đề xuất và xác nhận tách riêng theo môi trường, và mỗi xác nhận production tự tắt mapping `test` của cùng đơn vị (lý do được ghi lại). Các mapping có từ trước được coi là `test`.
