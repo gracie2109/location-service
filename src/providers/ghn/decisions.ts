@@ -1,5 +1,5 @@
 import type { Pool, PoolClient } from "pg";
-import { GHN_MODEL } from "./sync";
+import { GHN_MODEL, type GhnEnvironment } from "./sync";
 
 export type Decision =
   | { ok: true; message: string }
@@ -32,7 +32,12 @@ const loadCurrentUnit = async (db: Db, unitCode: string): Promise<{ level: strin
   ).rows[0];
 
 /** Why a unit cannot take a GHN record, or null when it can. */
-export const refuseUnit = async (db: Db, record: Pick<ProposalRow, "level" | "provider_parent_code">, unitCode: string): Promise<string | null> => {
+export const refuseUnit = async (
+  db: Db,
+  record: Pick<ProposalRow, "level" | "provider_parent_code">,
+  unitCode: string,
+  environment: GhnEnvironment,
+): Promise<string | null> => {
   const unit = await loadCurrentUnit(db, unitCode);
   if (!unit) return `unit ${unitCode} does not exist`;
   if (unit.level !== record.level) return `unit ${unitCode} is a ${unit.level}, the GHN record is a ${record.level}`;
@@ -41,8 +46,8 @@ export const refuseUnit = async (db: Db, record: Pick<ProposalRow, "level" | "pr
 
   const parent = (
     await db.query<{ code: string }>(
-      "select code from location.provider_codes where active and provider = 'ghn' and provider_model = $1 and provider_code = $2",
-      [GHN_MODEL, record.provider_parent_code],
+      "select code from location.provider_codes where active and provider = 'ghn' and provider_model = $1 and provider_environment = $3 and provider_code = $2",
+      [GHN_MODEL, record.provider_parent_code, environment],
     )
   ).rows[0];
   if (!parent) return `GHN province ${record.provider_parent_code} of this ward is not confirmed yet`;
@@ -51,34 +56,41 @@ export const refuseUnit = async (db: Db, record: Pick<ProposalRow, "level" | "pr
 };
 
 /** Every refusal returns before anything is written, so the caller rolls back and releases the connection cleanly. */
-const decide = async (db: Db, providerCode: string, unitCode: string, by: string): Promise<Decision> => {
+const decide = async (db: Db, providerCode: string, unitCode: string, by: string, environment: GhnEnvironment): Promise<Decision> => {
   const proposal = (
     await db.query<ProposalRow>(
-      "select id, level, provider_code, provider_parent_code, provider_name, status, suggested_code from location.provider_code_proposals where provider = 'ghn' and provider_model = $1 and provider_code = $2 for update",
-      [GHN_MODEL, providerCode],
+      "select id, level, provider_code, provider_parent_code, provider_name, status, suggested_code from location.provider_code_proposals where provider = 'ghn' and provider_model = $1 and provider_environment = $3 and provider_code = $2 for update",
+      [GHN_MODEL, providerCode, environment],
     )
   ).rows[0];
   if (!proposal) return fail(`no GHN proposal with code ${providerCode}; run sync first`);
   if (proposal.status !== "pending") return fail(`proposal ${providerCode} is already ${proposal.status}`);
 
-  const refusal = await refuseUnit(db, proposal, unitCode);
+  const refusal = await refuseUnit(db, proposal, unitCode, environment);
   if (refusal) return fail(refusal);
 
+  // The other gateway's mapping of this unit or of this GHN id gives way: one live mapping per unit.
   await db.query(
-    `insert into location.provider_codes (code, provider, provider_model, provider_code, provider_parent_code, provider_name, match_method, confirmed_by)
-     values ($1, 'ghn', $2, $3, $4, $5, 'confirmed', $6)`,
-    [unitCode, GHN_MODEL, providerCode, proposal.provider_parent_code, proposal.provider_name, by],
+    `update location.provider_codes
+        set active = false, deactivated_at = now(), deactivated_by = $4, deactivated_reason = $5
+      where active and provider = 'ghn' and provider_model = $1 and provider_environment <> $2 and (code = $3 or provider_code = $6)`,
+    [GHN_MODEL, environment, unitCode, by, `replaced by a ${environment} mapping`, providerCode],
+  );
+  await db.query(
+    `insert into location.provider_codes (code, provider, provider_model, provider_environment, provider_code, provider_parent_code, provider_name, match_method, confirmed_by)
+     values ($1, 'ghn', $2, $7, $3, $4, $5, 'confirmed', $6)`,
+    [unitCode, GHN_MODEL, providerCode, proposal.provider_parent_code, proposal.provider_name, by, environment],
   );
   await db.query("update location.provider_code_proposals set status = 'confirmed', decided_by = $2, decided_at = now() where id = $1", [proposal.id, by]);
   return { ok: true, message: `GHN ${providerCode} (${proposal.provider_name}) → ${unitCode}` };
 };
 
 /** Confirms one proposal for a unit chosen by a person. Everything happens in one transaction. */
-export const confirmProposal = async (pool: Pool, providerCode: string, unitCode: string, by: string): Promise<Decision> => {
+export const confirmProposal = async (pool: Pool, providerCode: string, unitCode: string, by: string, environment: GhnEnvironment = "test"): Promise<Decision> => {
   const db = await pool.connect();
   try {
     await db.query("begin");
-    const decision = await decide(db, providerCode, unitCode, by);
+    const decision = await decide(db, providerCode, unitCode, by, environment);
     await db.query(decision.ok ? "commit" : "rollback");
     return decision;
   } catch (error) {
@@ -90,21 +102,21 @@ export const confirmProposal = async (pool: Pool, providerCode: string, unitCode
   }
 };
 
-export const rejectProposal = async (pool: Pool, providerCode: string, by: string): Promise<Decision> => {
+export const rejectProposal = async (pool: Pool, providerCode: string, by: string, environment: GhnEnvironment = "test"): Promise<Decision> => {
   const result = await pool.query(
-    "update location.provider_code_proposals set status = 'rejected', decided_by = $3, decided_at = now() where provider = 'ghn' and provider_model = $1 and provider_code = $2 and status = 'pending'",
-    [GHN_MODEL, providerCode, by],
+    "update location.provider_code_proposals set status = 'rejected', decided_by = $3, decided_at = now() where provider = 'ghn' and provider_model = $1 and provider_environment = $4 and provider_code = $2 and status = 'pending'",
+    [GHN_MODEL, providerCode, by, environment],
   );
   return result.rowCount ? { ok: true, message: `rejected GHN ${providerCode}` } : fail(`no pending proposal ${providerCode}`);
 };
 
 /** Confirms every pending proposal whose only candidate is the suggestion (reason exact_name) at one level. */
-export const confirmAllExact = async (pool: Pool, level: "province" | "commune", by: string): Promise<Decision[]> => {
+export const confirmAllExact = async (pool: Pool, level: "province" | "commune", by: string, environment: GhnEnvironment = "test"): Promise<Decision[]> => {
   const rows = await pool.query<{ provider_code: string; suggested_code: string }>(
-    "select provider_code, suggested_code from location.provider_code_proposals where provider = 'ghn' and provider_model = $1 and level = $2 and status = 'pending' and reason = 'exact_name' and suggested_code is not null order by provider_code",
-    [GHN_MODEL, level],
+    "select provider_code, suggested_code from location.provider_code_proposals where provider = 'ghn' and provider_model = $1 and level = $2 and provider_environment = $3 and status = 'pending' and reason = 'exact_name' and suggested_code is not null order by provider_code",
+    [GHN_MODEL, level, environment],
   );
   const decisions: Decision[] = [];
-  for (const row of rows.rows) decisions.push(await confirmProposal(pool, row.provider_code, row.suggested_code, by));
+  for (const row of rows.rows) decisions.push(await confirmProposal(pool, row.provider_code, row.suggested_code, by, environment));
   return decisions;
 };

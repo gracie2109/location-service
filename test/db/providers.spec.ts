@@ -81,7 +81,7 @@ describeDb("provider codes, snapshot and API keys (needs TEST_DATABASE_URL)", ()
     const res = await get(`/api/v1/locations/${code(3)}/provider-codes?provider=ghn`, readKey).expect(200);
     expect(res.headers["cache-control"]).toBe("private, no-store");
     expect(res.body.data).toEqual([
-      expect.objectContaining({ code: code(3), provider: "ghn", provider_model: "ghn_v2", provider_code: "1003646", provider_parent_code: "1000001", provider_name: "Phường Ví Dụ Alpha", match_method: "confirmed" }),
+      expect.objectContaining({ code: code(3), provider: "ghn", provider_model: "ghn_v2", provider_environment: "test", provider_code: "1003646", provider_parent_code: "1000001", provider_name: "Phường Ví Dụ Alpha", match_method: "confirmed" }),
     ]);
     expect(res.body.data[0].verified_at).toMatch(/Z$/);
     const unmapped = await get(`/api/v1/locations/${code(4)}/provider-codes`, readKey).expect(200);

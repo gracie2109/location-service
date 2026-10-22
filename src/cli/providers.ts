@@ -4,19 +4,21 @@ import { loadEnv } from "../config/env";
 import { confirmAllExact, confirmProposal, rejectProposal, type Decision } from "../providers/ghn/decisions";
 import { deactivateMapping, replaceMapping } from "../providers/ghn/lifecycle";
 import { GhnClient } from "../providers/ghn/ghn-client";
-import { runGhnSync } from "../providers/ghn/sync";
+import { runGhnSync, type GhnEnvironment } from "../providers/ghn/sync";
 
 const USAGE = `Usage:
-  node dist/cli/providers.js ghn sync [--apply]
+  node dist/cli/providers.js ghn sync --environment production|test [--apply]
   node dist/cli/providers.js ghn list [--status pending] [--reason exact_name|ambiguous|no_match] [--level province|commune] [--limit 100]
-  node dist/cli/providers.js ghn confirm --code <ghn id> --unit <vn_...> --by <name>
-  node dist/cli/providers.js ghn confirm --all-exact province|commune --by <name>
-  node dist/cli/providers.js ghn reject --code <ghn id> --by <name>
+  node dist/cli/providers.js ghn confirm --environment production|test --code <ghn id> --unit <vn_...> --by <name>
+  node dist/cli/providers.js ghn confirm --environment production|test --all-exact province|commune --by <name>
+  node dist/cli/providers.js ghn reject --environment production|test --code <ghn id> --by <name>
   node dist/cli/providers.js ghn deactivate --code <ghn id> --by <name> --reason "<why>"
   node dist/cli/providers.js ghn replace --code <ghn id> --unit <vn_...> --by <name> --reason "<why>"
 
 \`sync\` only sends GET requests to GHN. Without --apply it writes nothing. Provinces must be confirmed
-before \`sync\` fetches their wards. Needs GHN_TOKEN and GHN_SHOP_ID in the environment.`;
+before \`sync\` fetches their wards. Needs GHN_TOKEN and GHN_SHOP_ID in the environment.
+\`--environment\` names the GHN gateway the token belongs to; GHN_BASE_URL must match it. A production mapping
+replaces the test mapping of the same unit.`;
 
 const fail = (message: string): never => {
   process.stderr.write(`${message}\n\n${USAGE}\n`);
@@ -45,10 +47,15 @@ const main = async (): Promise<void> => {
       unit: { type: "string" },
       by: { type: "string" },
       "all-exact": { type: "string" },
+      environment: { type: "string" },
     },
   });
   if (positionals[0] !== "ghn") fail("The only provider is `ghn`.");
   const command = positionals[1];
+
+  const needsEnvironment = command === "sync" || command === "confirm" || command === "reject";
+  if (needsEnvironment && values.environment !== "production" && values.environment !== "test") fail("--environment must be production or test");
+  const environment = (values.environment ?? "test") as GhnEnvironment;
 
   const env = loadEnv();
   if (!env.DATABASE_URL) fail("DATABASE_URL is not set");
@@ -56,8 +63,9 @@ const main = async (): Promise<void> => {
   try {
     if (command === "sync") {
       if (!env.GHN_TOKEN || !env.GHN_SHOP_ID) fail("GHN_TOKEN and GHN_SHOP_ID must be set");
+      if ((environment === "test") !== env.GHN_BASE_URL.includes("dev-online-gateway")) fail(`GHN_BASE_URL (${env.GHN_BASE_URL}) does not match --environment ${environment}`);
       const client = new GhnClient({ token: env.GHN_TOKEN ?? "", shopId: env.GHN_SHOP_ID ?? "", baseUrl: env.GHN_BASE_URL });
-      const report = await runGhnSync(pool, client, values.apply);
+      const report = await runGhnSync(pool, client, values.apply, environment);
       print(report);
       process.exitCode = report.status === "failed" ? 1 : 0;
     } else if (command === "list") {
@@ -77,14 +85,14 @@ const main = async (): Promise<void> => {
       if (values["all-exact"]) {
         const level = values["all-exact"];
         if (level !== "province" && level !== "commune") fail("--all-exact must be province or commune");
-        printDecisions(await confirmAllExact(pool, level as "province" | "commune", values.by ?? ""));
+        printDecisions(await confirmAllExact(pool, level as "province" | "commune", values.by ?? "", environment));
       } else {
         if (!values.code || !values.unit) fail("--code and --unit are required");
-        printDecisions([await confirmProposal(pool, values.code ?? "", values.unit ?? "", values.by ?? "")]);
+        printDecisions([await confirmProposal(pool, values.code ?? "", values.unit ?? "", values.by ?? "", environment)]);
       }
     } else if (command === "reject") {
       if (!values.code || !values.by) fail("--code and --by are required");
-      printDecisions([await rejectProposal(pool, values.code ?? "", values.by ?? "")]);
+      printDecisions([await rejectProposal(pool, values.code ?? "", values.by ?? "", environment)]);
     } else if (command === "deactivate") {
       if (!values.code || !values.by || !values.reason) fail("--code, --by and --reason are required");
       printDecisions([await deactivateMapping(pool, values.code ?? "", values.by ?? "", values.reason ?? "")]);

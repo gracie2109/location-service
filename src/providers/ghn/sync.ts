@@ -5,10 +5,14 @@ import { matchProvinces, matchWards } from "./matcher";
 import type { GhnUnit, Proposal } from "./types";
 
 export const GHN_MODEL = "ghn_v2";
+
+/** The GHN gateway a sync reads from; its mappings are tagged with it. */
+export type GhnEnvironment = "production" | "test";
 const REPORT_SAMPLE = 50;
 
 export type SyncReport = {
   mode: "dry_run" | "apply";
+  environment: GhnEnvironment;
   status: "succeeded" | "failed";
   catalog_version_id: string | null;
   ghn_provinces: number;
@@ -22,8 +26,9 @@ export type SyncReport = {
   errors: string[];
 };
 
-const emptyReport = (apply: boolean): SyncReport => ({
+const emptyReport = (apply: boolean, environment: GhnEnvironment): SyncReport => ({
   mode: apply ? "apply" : "dry_run",
+  environment,
   status: "failed",
   catalog_version_id: null,
   ghn_provinces: 0,
@@ -37,28 +42,28 @@ const emptyReport = (apply: boolean): SyncReport => ({
 
 type Confirmed = { provider_code: string; code: string; provider_name: string; level: string };
 
-const loadConfirmed = async (pool: Pool): Promise<Confirmed[]> => {
+const loadConfirmed = async (pool: Pool, environment: GhnEnvironment): Promise<Confirmed[]> => {
   const result = await pool.query<Confirmed>(
     `select pc.provider_code, pc.code, pc.provider_name, u.level
        from location.provider_codes pc join location.units u on u.code = pc.code
-      where pc.active and pc.provider = 'ghn' and pc.provider_model = $1`,
-    [GHN_MODEL],
+      where pc.active and pc.provider = 'ghn' and pc.provider_model = $1 and pc.provider_environment = $2`,
+    [GHN_MODEL, environment],
   );
   return result.rows;
 };
 
-const saveProposals = async (db: PoolClient, proposals: Proposal[]): Promise<void> => {
+const saveProposals = async (db: PoolClient, proposals: Proposal[], environment: GhnEnvironment): Promise<void> => {
   for (const proposal of proposals) {
     await db.query(
       `insert into location.provider_code_proposals
-         (provider, provider_model, level, provider_code, provider_parent_code, provider_name, provider_status, suggested_code, reason, candidate_codes)
-       values ('ghn', $1, $2, $3, $4, $5, $6, $7, $8, $9)
-       on conflict (provider, provider_model, provider_code) do update set
+         (provider, provider_model, provider_environment, level, provider_code, provider_parent_code, provider_name, provider_status, suggested_code, reason, candidate_codes)
+       values ('ghn', $1, $10, $2, $3, $4, $5, $6, $7, $8, $9)
+       on conflict (provider, provider_model, provider_environment, provider_code) do update set
          level = excluded.level, provider_parent_code = excluded.provider_parent_code, provider_name = excluded.provider_name,
          provider_status = excluded.provider_status, suggested_code = excluded.suggested_code, reason = excluded.reason,
          candidate_codes = excluded.candidate_codes, synced_at = now()
        where location.provider_code_proposals.status = 'pending'`,
-      [GHN_MODEL, proposal.level, proposal.providerCode, proposal.providerParentCode, proposal.providerName, proposal.providerStatus, proposal.suggestedCode, proposal.reason, proposal.candidateCodes],
+      [GHN_MODEL, proposal.level, proposal.providerCode, proposal.providerParentCode, proposal.providerName, proposal.providerStatus, proposal.suggestedCode, proposal.reason, proposal.candidateCodes, environment],
     );
   }
 };
@@ -68,8 +73,8 @@ const saveProposals = async (db: PoolClient, proposals: Proposal[]): Promise<voi
  * person to confirm. Wards are fetched only for provinces whose mapping is already confirmed. Dry run
  * does everything except write.
  */
-export const runGhnSync = async (pool: Pool, ghn: GhnClient, apply: boolean): Promise<SyncReport> => {
-  const report = emptyReport(apply);
+export const runGhnSync = async (pool: Pool, ghn: GhnClient, apply: boolean, environment: GhnEnvironment = "test"): Promise<SyncReport> => {
+  const report = emptyReport(apply, environment);
   try {
     const snapshot = await new CatalogRepository(pool).loadSnapshot();
     if (!snapshot) {
@@ -78,7 +83,7 @@ export const runGhnSync = async (pool: Pool, ghn: GhnClient, apply: boolean): Pr
     }
     report.catalog_version_id = snapshot.catalog.id;
 
-    const confirmed = await loadConfirmed(pool);
+    const confirmed = await loadConfirmed(pool, environment);
     const confirmedCodes = new Set(confirmed.map((row) => row.provider_code));
     const provinceByGhnId = new Map(confirmed.filter((row) => row.level === "province").map((row) => [row.provider_code, row.code]));
 
@@ -114,7 +119,7 @@ export const runGhnSync = async (pool: Pool, ghn: GhnClient, apply: boolean): Pr
     const db = await pool.connect();
     try {
       await db.query("begin");
-      await saveProposals(db, open);
+      await saveProposals(db, open, environment);
       await db.query(apply ? "commit" : "rollback");
     } catch (error) {
       await db.query("rollback").catch(() => undefined);

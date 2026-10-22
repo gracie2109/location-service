@@ -136,6 +136,26 @@ describeDb("GHN sync and confirmation (needs TEST_DATABASE_URL)", () => {
     expect(await count("provider_codes", "provider_code = '1003648' and active")).toBe(0);
   });
 
+  it("keeps the gateway apart: a production sync proposes again and its confirmation replaces the test mapping", async () => {
+    await runGhnSync(pool, client(), true);
+    await confirmAllExact(pool, "province", "tester");
+    expect(await count("provider_codes", "active and provider_environment = 'test'")).toBe(2);
+
+    const production = await runGhnSync(pool, client(), true, "production");
+    expect(production).toMatchObject({ environment: "production", already_confirmed: 0, ghn_wards: 0 });
+    expect(await count("provider_code_proposals", "provider_environment = 'production'")).toBe(3);
+
+    const decisions = await confirmAllExact(pool, "province", "tester", "production");
+    expect(decisions.every((d) => d.ok)).toBe(true);
+    expect(await count("provider_codes", "active and provider_environment = 'test'")).toBe(0);
+    expect(await count("provider_codes", "active and provider_environment = 'production'")).toBe(2);
+    const old = await pool.query("select deactivated_reason from location.provider_codes where not active order by id");
+    expect(old.rows).toEqual([{ deactivated_reason: "replaced by a production mapping" }, { deactivated_reason: "replaced by a production mapping" }]);
+
+    const wardsRun = await runGhnSync(pool, client(), true, "production");
+    expect(wardsRun.ghn_wards).toBe(4);
+  });
+
   it("reports a confirmed mapping whose GHN record was renamed or switched off", async () => {
     await runGhnSync(pool, client(), true);
     await confirmAllExact(pool, "province", "tester");

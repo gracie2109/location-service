@@ -6,6 +6,7 @@ export type ProviderCodeView = {
   code: string;
   provider: string;
   provider_model: string;
+  provider_environment: "production" | "test";
   provider_code: string;
   provider_parent_code: string | null;
   provider_name: string;
@@ -13,7 +14,7 @@ export type ProviderCodeView = {
   verified_at: string;
 };
 
-const COLUMNS = `code, provider, provider_model, provider_code, provider_parent_code, provider_name, match_method,
+const COLUMNS = `code, provider, provider_model, provider_environment, provider_code, provider_parent_code, provider_name, match_method,
   to_char(confirmed_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as verified_at`;
 
 @Injectable()

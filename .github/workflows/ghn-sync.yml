@@ -41,6 +41,7 @@ jobs:
       GHN_SHOP_ID: ${{ secrets.GHN_SHOP_ID }}
       GHN_BASE_URL: ${{ inputs.environment == 'test' && 'https://dev-online-gateway.ghn.vn' || 'https://online-gateway.ghn.vn' }}
       STEP: ${{ inputs.step }}
+      GHN_ENVIRONMENT: ${{ inputs.environment }}
       GHN_CODE: ${{ inputs.code }}
       GHN_UNIT: ${{ inputs.unit }}
       APPLY: ${{ inputs.apply && '--apply' || '' }}
@@ -62,10 +63,10 @@ jobs:
         run: |
           set -euo pipefail
           case "$STEP" in
-            sync) node dist/cli/providers.js ghn sync $APPLY | tee report.json ;;
-            confirm-provinces) node dist/cli/providers.js ghn confirm --all-exact province --by github-actions | tee report.json ;;
-            confirm-communes) node dist/cli/providers.js ghn confirm --all-exact commune --by github-actions | tee report.json ;;
-            confirm-one) node dist/cli/providers.js ghn confirm --code "$GHN_CODE" --unit "$GHN_UNIT" --by github-actions | tee report.json ;;
+            sync) node dist/cli/providers.js ghn sync --environment "$GHN_ENVIRONMENT" $APPLY | tee report.json ;;
+            confirm-provinces) node dist/cli/providers.js ghn confirm --environment "$GHN_ENVIRONMENT" --all-exact province --by github-actions | tee report.json ;;
+            confirm-communes) node dist/cli/providers.js ghn confirm --environment "$GHN_ENVIRONMENT" --all-exact commune --by github-actions | tee report.json ;;
+            confirm-one) node dist/cli/providers.js ghn confirm --environment "$GHN_ENVIRONMENT" --code "$GHN_CODE" --unit "$GHN_UNIT" --by github-actions | tee report.json ;;
             list-pending) node dist/cli/providers.js ghn list --status pending --limit 100 | tee report.json ;;
           esac
       - uses: actions/upload-artifact@v4

@@ -1,15 +1,23 @@
 import type { Pool, PoolClient } from "pg";
 import { refuseUnit, type Decision } from "./decisions";
-import { GHN_MODEL } from "./sync";
+import { GHN_MODEL, type GhnEnvironment } from "./sync";
 
-type MappingRow = { id: string; code: string; provider_code: string; provider_parent_code: string | null; provider_name: string; level: string };
+type MappingRow = {
+  id: string;
+  code: string;
+  provider_code: string;
+  provider_parent_code: string | null;
+  provider_name: string;
+  provider_environment: GhnEnvironment;
+  level: string;
+};
 
 const fail = (message: string): Decision => ({ ok: false, message });
 
 const lockMapping = async (db: PoolClient, providerCode: string): Promise<MappingRow | undefined> =>
   (
     await db.query<MappingRow>(
-      `select pc.id, pc.code, pc.provider_code, pc.provider_parent_code, pc.provider_name, u.level
+      `select pc.id, pc.code, pc.provider_code, pc.provider_parent_code, pc.provider_name, pc.provider_environment, u.level
          from location.provider_codes pc join location.units u on u.code = pc.code
         where pc.active and pc.provider = 'ghn' and pc.provider_model = $1 and pc.provider_code = $2 for update of pc`,
       [GHN_MODEL, providerCode],
@@ -57,13 +65,13 @@ export const replaceMapping = (pool: Pool, providerCode: string, unitCode: strin
     const mapping = await lockMapping(db, providerCode);
     if (!mapping) return fail(`no live GHN mapping with code ${providerCode}`);
     if (mapping.code === unitCode) return fail(`GHN ${providerCode} is already mapped to ${unitCode}`);
-    const refusal = await refuseUnit(db, mapping, unitCode);
+    const refusal = await refuseUnit(db, mapping, unitCode, mapping.provider_environment);
     if (refusal) return fail(refusal);
     await deactivateRow(db, mapping.id, by, reason);
     await db.query(
-      `insert into location.provider_codes (code, provider, provider_model, provider_code, provider_parent_code, provider_name, match_method, confirmed_by)
-       values ($1, 'ghn', $2, $3, $4, $5, 'confirmed', $6)`,
-      [unitCode, GHN_MODEL, providerCode, mapping.provider_parent_code, mapping.provider_name, by],
+      `insert into location.provider_codes (code, provider, provider_model, provider_environment, provider_code, provider_parent_code, provider_name, match_method, confirmed_by)
+       values ($1, 'ghn', $2, $7, $3, $4, $5, 'confirmed', $6)`,
+      [unitCode, GHN_MODEL, providerCode, mapping.provider_parent_code, mapping.provider_name, by, mapping.provider_environment],
     );
     return { ok: true, message: `GHN ${providerCode} moved from ${mapping.code} to ${unitCode}` };
   });
