@@ -1,0 +1,63 @@
+name: Issue API key
+
+# Creates an API key for a consumer and stores it straight into that consumer repository's secret
+# LOCATION_SERVICE_KEY. The key is masked, never printed and never uploaded; only its hash is kept here.
+# Needs the secret BONGCUN_SECRETS_TOKEN: a fine-grained personal access token limited to the consumer
+# repository with "Secrets: Read and write" (docs/trien-khai.md). If storing fails the new client is revoked.
+on:
+  workflow_dispatch:
+    inputs:
+      client:
+        description: "Client name; a timestamp is appended (for example pawtiny-202611011200)"
+        type: string
+        default: pawtiny
+      scopes:
+        description: "Comma-separated scopes"
+        type: string
+        default: "catalog:snapshot,provider-codes:read"
+      target_repo:
+        description: "Repository that receives the secret"
+        type: string
+        default: gracie2109/bong-cun
+
+permissions:
+  contents: read
+
+jobs:
+  issue:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      GH_TOKEN: ${{ secrets.BONGCUN_SECRETS_TOKEN }}
+      CLIENT: ${{ inputs.client }}
+      SCOPES: ${{ inputs.scopes }}
+      TARGET_REPO: ${{ inputs.target_repo }}
+    steps:
+      - name: Check the secrets are set
+        run: |
+          for name in DATABASE_URL GH_TOKEN; do
+            if [ -z "${!name}" ]; then echo "::error::Secret $name is not set (BONGCUN_SECRETS_TOKEN for GH_TOKEN; see docs/trien-khai.md)."; exit 1; fi
+          done
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Create the key and store it
+        shell: bash
+        run: |
+          set -euo pipefail
+          name="${CLIENT}-$(date -u +%Y%m%d%H%M)"
+          key="$(node dist/cli/api-keys.js create --name "$name" --scopes "$SCOPES" --key-only)"
+          echo "::add-mask::$key"
+          if printf '%s' "$key" | gh secret set LOCATION_SERVICE_KEY --repo "$TARGET_REPO"; then
+            echo "Client $name created; its key is now the secret LOCATION_SERVICE_KEY of $TARGET_REPO."
+          else
+            node dist/cli/api-keys.js revoke --name "$name"
+            echo "::error::Could not store the secret in $TARGET_REPO; the new client was revoked."
+            exit 1
+          fi

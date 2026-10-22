@@ -4,11 +4,12 @@ import { generateApiKey, isScope } from "../auth/api-key";
 import { loadEnv } from "../config/env";
 
 const USAGE = `Usage:
-  node dist/cli/api-keys.js create --name <client> --scopes catalog:snapshot,provider-codes:read [--rate-limit 120]
+  node dist/cli/api-keys.js create --name <client> --scopes catalog:snapshot,provider-codes:read [--rate-limit 120] [--key-only]
   node dist/cli/api-keys.js revoke --name <client>
   node dist/cli/api-keys.js list
 
-The key is printed once by \`create\` and cannot be shown again; only a hash is stored.`;
+The key is printed once by \`create\` and cannot be shown again; only a hash is stored.
+\`--key-only\` prints just the key, for a script that stores it straight into a secret.`;
 
 const fail = (message: string): never => {
   process.stderr.write(`${message}\n\n${USAGE}\n`);
@@ -18,7 +19,7 @@ const fail = (message: string): never => {
 const main = async (): Promise<void> => {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
-    options: { name: { type: "string" }, scopes: { type: "string" }, "rate-limit": { type: "string" } },
+    options: { name: { type: "string" }, scopes: { type: "string" }, "rate-limit": { type: "string" }, "key-only": { type: "boolean", default: false } },
   });
   const command = positionals[0];
   const { DATABASE_URL } = loadEnv();
@@ -36,7 +37,7 @@ const main = async (): Promise<void> => {
         "insert into location.api_clients (name, key_prefix, key_hash, scopes, rate_limit_per_min) values ($1, $2, $3, $4, $5)",
         [values.name, prefix, hash, scopes, rate],
       );
-      process.stdout.write(`Client "${values.name}" created. Store this key now; it is not shown again:\n${key}\n`);
+      process.stdout.write(values["key-only"] ? `${key}\n` : `Client "${values.name}" created. Store this key now; it is not shown again:\n${key}\n`);
     } else if (command === "revoke") {
       if (!values.name) fail("--name is required");
       const result = await pool.query("update location.api_clients set revoked_at = now() where name = $1 and revoked_at is null", [values.name]);

@@ -42,3 +42,11 @@ Nếu GHN chặn IP của GitHub Actions thì bước `sync` sẽ báo lỗi; kh
 ### Môi trường GHN của mapping
 
 Mỗi mapping ghi `provider_environment` (`test` hoặc `production`) theo input `environment` của workflow, và API trả trường này. Mã của gateway `test` không được dùng để tính phí trên gateway production. Khi đã có token production, chạy lại đúng bốn bước trên với `environment = production`: các đề xuất và xác nhận tách riêng theo môi trường, và mỗi xác nhận production tự tắt mapping `test` của cùng đơn vị (lý do được ghi lại). Các mapping có từ trước được coi là `test`.
+
+## Cấp API key cho dự án dùng dịch vụ (Pawtiny)
+
+Workflow **Issue API key** (chạy tay, nhánh `main`) tạo key rồi ghi thẳng vào secret `LOCATION_SERVICE_KEY` của repo đích (`gracie2109/bong-cun`), không in key ra log, không tải lên artifact. Nếu ghi secret thất bại thì client vừa tạo bị thu hồi.
+
+Cần một lần: tạo fine-grained personal access token giới hạn ở repo `bong-cun`, quyền **Secrets: Read and write**, rồi lưu thành secret `BONGCUN_SECRETS_TOKEN` của repo `location-service`. Token chỉ có quyền ghi secret của một repo.
+
+Thu hồi key: `node dist/cli/api-keys.js revoke --name <tên client>` (xem tên bằng `list`). Xoay key: chạy lại workflow (tên client có thêm dấu thời gian) rồi thu hồi client cũ.
