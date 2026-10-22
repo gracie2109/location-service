@@ -27,3 +27,14 @@ Chạy lại cùng bước đã apply chỉ báo `already_imported`, không ghi 
 - Workflow `Weekly backup` chạy 3h sáng Chủ nhật (giờ Việt Nam), hoặc chạy tay ở Actions. Nó dump schema `location` bằng `pg_dump` 18, mã hóa AES256 bằng `gpg` rồi lưu thành artifact `location-backup` trong 30 ngày.
 - Cần thêm secret `BACKUP_PASSPHRASE` (một chuỗi dài tự đặt, lưu ở nơi an toàn: mất chuỗi này thì không giải mã được bản sao lưu). Dùng lại `DATABASE_URL`.
 - Neon Free chỉ giữ lịch sử thay đổi rất ngắn, nên đây là bản sao lưu chính. Khôi phục: tải artifact, `gpg --decrypt file.gpg > location.dump`, rồi `pg_restore --no-owner --dbname "$DATABASE_URL" location.dump` vào database trống đã chạy `npm run migrate`. Chưa thử khôi phục lần nào, cần thử một lần.
+
+## Đồng bộ mã GHN (chạy tay)
+
+Cần secret `GHN_TOKEN`, `GHN_SHOP_ID` (và `DATABASE_URL`). Vào Actions > GHN sync > Run workflow, theo thứ tự:
+
+1. `sync` (apply tắt) để xem thử, rồi `sync` với apply bật: ghi đề xuất ghép tỉnh GHN với tỉnh trong danh mục.
+2. `confirm-provinces`: xác nhận các tỉnh trùng tên hoàn toàn.
+3. `sync` với apply bật lần nữa: lần này GHN mới trả xã của các tỉnh đã xác nhận, nên mới có đề xuất cho xã.
+4. `confirm-communes`: xác nhận các xã trùng tên hoàn toàn. Các ca còn lại (trùng tên nhiều nơi, không khớp) cần người xem bằng `list-pending`.
+
+Nếu GHN chặn IP của GitHub Actions thì bước `sync` sẽ báo lỗi; khi đó phải chạy tay từ máy đã được GHN cho phép.
