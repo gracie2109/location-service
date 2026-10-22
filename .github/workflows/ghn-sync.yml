@@ -1,0 +1,59 @@
+name: GHN sync
+
+# Manual only. `sync` is a dry run unless `apply` is true; the confirm steps always write.
+on:
+  workflow_dispatch:
+    inputs:
+      step:
+        description: "sync | confirm-provinces | confirm-communes | list-pending"
+        type: choice
+        options: [sync, confirm-provinces, confirm-communes, list-pending]
+        default: sync
+      apply:
+        description: "Write the result (sync only; false = dry run)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  ghn:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      GHN_TOKEN: ${{ secrets.GHN_TOKEN }}
+      GHN_SHOP_ID: ${{ secrets.GHN_SHOP_ID }}
+      STEP: ${{ inputs.step }}
+      APPLY: ${{ inputs.apply && '--apply' || '' }}
+    steps:
+      - name: Check the secrets are set
+        run: |
+          for name in DATABASE_URL GHN_TOKEN GHN_SHOP_ID; do
+            if [ -z "${!name}" ]; then echo "::error::Secret $name is not set (see docs/trien-khai.md)."; exit 1; fi
+          done
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Run the step
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$STEP" in
+            sync) node dist/cli/providers.js ghn sync $APPLY | tee report.json ;;
+            confirm-provinces) node dist/cli/providers.js ghn confirm --all-exact province --by github-actions | tee report.json ;;
+            confirm-communes) node dist/cli/providers.js ghn confirm --all-exact commune --by github-actions | tee report.json ;;
+            list-pending) node dist/cli/providers.js ghn list --status pending --limit 100 | tee report.json ;;
+          esac
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ghn-report-${{ inputs.step }}
+          path: report.json
+          if-no-files-found: ignore
