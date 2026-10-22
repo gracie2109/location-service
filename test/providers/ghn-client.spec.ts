@@ -67,6 +67,12 @@ describe("GhnClient", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it("reports GHN's own reason for a 400 without retrying", async () => {
+    const fetchImpl = jest.fn().mockResolvedValue(reply({ code: 400, code_message_value: "Invalid shop id" }, 400));
+    await expect(new GhnClient(config, fetchImpl, 0).provinces()).rejects.toThrow("GHN answered 400: Invalid shop id");
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it("treats data:null for a ward request as a wrong province id", async () => {
     const fetchImpl = jest.fn().mockResolvedValue(reply({ code: 200, data: null }));
     await expect(new GhnClient(config, fetchImpl, 0).wards(42)).rejects.toThrow("no wards for province 42");

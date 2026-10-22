@@ -31,13 +31,22 @@ const retryAfterMs = (response: Response): number | undefined => {
 
 const isTimeout = (error: unknown): boolean => error instanceof DOMException && (error.name === "TimeoutError" || error.name === "AbortError");
 
+const reasonSchema = z.object({ code_message_value: z.string().optional(), message: z.string().optional() });
+
+/** GHN's own explanation of a 4xx, shortened; it describes the request, never contains the token. */
+const rejectionReason = async (response: Response): Promise<string> => {
+  const parsed = reasonSchema.safeParse(await response.json().catch(() => null));
+  const reason = parsed.success ? (parsed.data.code_message_value ?? parsed.data.message) : undefined;
+  return reason ? `: ${reason.slice(0, 200)}` : "";
+};
+
 export type GhnConfig = { token: string; shopId: string; baseUrl: string };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Read-only client for GHN's two-level master data. Only GET requests are made. Errors never contain
- * the token or the response body.
+ * the token; for a 4xx they carry GHN's short explanation of the rejection.
  */
 export class GhnClient {
   constructor(
@@ -75,7 +84,7 @@ export class GhnClient {
         const response = await this.fetchImpl(url, { method: "GET", headers: { Token: this.config.token, ShopId: this.config.shopId }, signal: AbortSignal.timeout(this.timeoutMs) });
         if (response.status === 401) throw new GhnError("GHN refused the token or IP (401); check GHN_TOKEN, GHN_SHOP_ID and any IP allow-list");
         if (response.status === 429 || response.status >= 500) throw new RetryableError(`GHN answered ${response.status}`, retryAfterMs(response));
-        if (!response.ok) throw new GhnError(`GHN answered ${response.status}`);
+        if (!response.ok) throw new GhnError(`GHN answered ${response.status}${await rejectionReason(response)}`);
         const parsed = responseSchema.safeParse(await response.json().catch(() => null));
         if (!parsed.success) throw new GhnError("GHN response does not have the documented shape");
         return (parsed.data.data ?? []).map((item) => ({
