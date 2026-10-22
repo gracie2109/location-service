@@ -24,6 +24,6 @@ Chạy lại cùng bước đã apply chỉ báo `already_imported`, không ghi 
 
 ## Sao lưu hằng tuần
 
-- Workflow `Weekly backup` chạy 3h sáng Chủ nhật (giờ Việt Nam), hoặc chạy tay ở Actions. Nó dump schema `location` bằng `pg_dump` 17, mã hóa AES256 bằng `gpg` rồi lưu thành artifact `location-backup` trong 30 ngày.
+- Workflow `Weekly backup` chạy 3h sáng Chủ nhật (giờ Việt Nam), hoặc chạy tay ở Actions. Nó dump schema `location` bằng `pg_dump` 18, mã hóa AES256 bằng `gpg` rồi lưu thành artifact `location-backup` trong 30 ngày.
 - Cần thêm secret `BACKUP_PASSPHRASE` (một chuỗi dài tự đặt, lưu ở nơi an toàn: mất chuỗi này thì không giải mã được bản sao lưu). Dùng lại `DATABASE_URL`.
 - Neon Free chỉ giữ lịch sử thay đổi rất ngắn, nên đây là bản sao lưu chính. Khôi phục: tải artifact, `gpg --decrypt file.gpg > location.dump`, rồi `pg_restore --no-owner --dbname "$DATABASE_URL" location.dump` vào database trống đã chạy `npm run migrate`. Chưa thử khôi phục lần nào, cần thử một lần.
